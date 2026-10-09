@@ -492,6 +492,7 @@ export function expectedExtraction(cv: CvFixture) {
     experience: cv.experience.map((e) => ({ company: e.company, title: e.title, start: e.start, end: e.end })),
     bulletCount:
       cv.experience.reduce((n, e) => n + e.bullets.length, 0) + cv.projects.reduce((n, p) => n + p.bullets.length, 0),
+    bullets: [...cv.experience.flatMap((e) => e.bullets), ...cv.projects.flatMap((p) => p.bullets)],
     skills: [...new Set(cv.skills.flatMap((g) => g.items))],
     education: cv.education.map((e) => ({ institution: e.institution, degree: e.degree, grade: e.grade })),
     certifications: cv.certifications.map((c) => c.name),

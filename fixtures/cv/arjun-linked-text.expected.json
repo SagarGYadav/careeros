@@ -17,6 +17,13 @@
     }
   ],
   "bulletCount": 5,
+  "bullets": [
+    "Migrated 30 marketing pages to the Next.js App Router with static generation.",
+    "Improved Largest Contentful Paint from 3.9s to 1.6s on mobile.",
+    "Built a reusable form system with Zod and React Hook Form.",
+    "Caches forecasts with TanStack Query.",
+    "Scores 100 for accessibility in Lighthouse."
+  ],
   "skills": [
     "Next.js",
     "React",

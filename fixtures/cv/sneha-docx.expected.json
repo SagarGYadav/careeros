@@ -23,6 +23,14 @@
     }
   ],
   "bulletCount": 6,
+  "bullets": [
+    "Built the patient app in React Native and Expo, rated 4.6 on the Play Store.",
+    "Added offline appointment booking with Redux Persist and background sync.",
+    "Cut crash rate from 2.1% to 0.4% by fixing memory leaks found with Flipper.",
+    "Implemented ride-tracking screens with React Native Maps.",
+    "Wrote Jest tests for booking and payment reducers.",
+    "Published on the Play Store with 1,000+ downloads."
+  ],
   "skills": [
     "React Native",
     "Expo",

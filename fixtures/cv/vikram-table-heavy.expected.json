@@ -23,6 +23,13 @@
     }
   ],
   "bulletCount": 5,
+  "bullets": [
+    "Own the company design system: 60 React components documented in Storybook.",
+    "Ran accessibility audits with axe and fixed 140 WCAG issues across 3 apps.",
+    "Built Figma-to-code token pipeline used by 5 teams.",
+    "Built customer onboarding screens in Vue.js and Vuex.",
+    "Improved Lighthouse performance score from 54 to 91 on the landing pages."
+  ],
   "skills": [
     "HTML",
     "CSS",

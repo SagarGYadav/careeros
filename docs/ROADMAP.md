@@ -50,7 +50,7 @@ session (local or cloud) can continue.
 - [x] 2b Data model, seed, fixtures: PersonalDetails, CareerProfile, RoleFamily, Skill, SkillRelation, UserSkill,
       UserSkillHistory, CV entry tables, OtherCvSection, CareerFact, ResumeVersion, StoredFile; role catalog, ~150 skills,
       relations; `scripts/make-fixtures.ts` (six fictional CVs)
-- [ ] 2c CV pipeline: storage, text with pages, link annotations, regex extractors, section detection, ResumeParser
+- [x] 2c CV pipeline: storage, text with pages, link annotations, regex extractors, section detection, ResumeParser
       (few-shot, PDF + text), verification (grounding, completeness with targeted second pass, deterministic overrides,
       date maths), evidence catalog
 - [ ] 2d Review and profile: side-by-side review (pdf.js), flags and source quotes, confirm → profile + Resume v1;
@@ -149,4 +149,10 @@ _(date — decision — reason)_
 - 2026-10-09 — `/dev/design` component gallery for visual checks; public in development only, 404 in production.
 - 2026-10-09 — Tests: Vitest projects `unit` and `integration` (integration forces `DATABASE_URL = DATABASE_URL_TEST` and runs `migrate deploy` first); Playwright builds and serves on port 3100 against the test DB with a 15s expect timeout (Neon round-trips + password hashing).
 - 2026-10-09 — `npm audit`: CI fails on critical. Known high advisories accepted as unreachable: `mysql2` (pulled in by Prisma/Better Auth, never used with Postgres) and `deepmerge-ts` (Prisma config loader, only merges our own config). The `shadcn` CLI moved to devDependencies (its CSS is build-time only).
-- 2026-10-09 — `/node` 22 (Vitest 5 peer requirement; runtime is Node 22). `CardTitle` gained an `as` prop so auth pages have an `<h1>` and cards under a page header use `<h2>`.
+- 2026-10-09 — `@types/node` 22 (Vitest 5 peer requirement; runtime is Node 22). `CardTitle` gained an `as` prop so auth pages have an `<h1>` and cards under a page header use `<h2>`.
+- 2026-10-09 — CV text: `unpdf` (pdf.js serverless build) for PDF text and link annotations, `mammoth` for DOCX text and hyperlinks. Both run locally and free. PDF text is rebuilt from positioned text items in the file's reading order (keeps two-column layouts in order) and wide gaps become tabs, so table rows keep their cells apart. Files under 200 characters of text (scans) are rejected with a clear message; no OCR.
+- 2026-10-09 — Uploaded CVs are stored in Postgres (`StoredFile.bytes`, ≤ 5 MB, deduplicated per user by SHA-256); no object store needed yet. The file type comes from magic bytes (`%PDF-`, ZIP with `word/document.xml`), never the name.
+- 2026-10-09 — A deterministic CV parser (`lib/cv/heuristic-parser.ts`) is the mock AI's answer, the no-AI fallback and the text-based reference for completeness checks. On the six fixtures it scores 100% on every §9.4 metric; the real targets are measured with Gemini in 2e.
+- 2026-10-09 — ParsedCv: entries (roles, projects, degrees, certifications) carry a `sourceQuote`; verbatim fields (names, bullets, skills) are their own quote and are located in the CV by the grounding check. Keeps AI output tokens down while every field can still show its source. The AI schema uses nullable instead of optional fields for structured-output compatibility across providers.
+- 2026-10-09 — Verification: grounding = normalised edit-distance window ≥ 0.9 (skills by skill key, so “NodeJS” = “Node.js”); regex/annotation e-mail, phone and links override the AI; completeness compares counts with the deterministic parse and retries only the short section (once, only when an AI answered), keeping the retry only if it has more grounded items.
+- 2026-10-09 — Integration tests set `AI_PROVIDERS=mock` in their setup, so a real key in `.env` can never be used by an automated test. Fixture `*.expected.json` now include bullet texts (for the bullet-capture metric).

@@ -23,6 +23,13 @@
     }
   ],
   "bulletCount": 5,
+  "bullets": [
+    "Developed course-authoring modules in React with TypeScript and Material UI.",
+    "Integrated REST APIs for assessments and reporting.",
+    "Reduced form errors by 30% by adding React Hook Form validation.",
+    "Built policy management screens in Angular 12 with RxJS.",
+    "Wrote unit tests with Jasmine and Karma for 15 components."
+  ],
   "skills": [
     "Angular",
     "React",

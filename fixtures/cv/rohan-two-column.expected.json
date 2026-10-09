@@ -23,6 +23,16 @@
     }
   ],
   "bulletCount": 8,
+  "bullets": [
+    "Led a team of 3 engineers to build a B2B ordering platform in Next.js and Node.js.",
+    "Designed PostgreSQL schemas and REST APIs serving 2 million requests per day.",
+    "Moved CI to GitHub Actions with Docker builds, cutting deploy time from 25 to 8 minutes.",
+    "Mentored 2 junior developers through code reviews and pairing.",
+    "Built analytics dashboards in React with D3.js for 40 enterprise clients.",
+    "Wrote MongoDB aggregation pipelines that reduced report generation time by 60%.",
+    "Added Cypress end-to-end tests for the 10 most-used user journeys.",
+    "Used by 6 schools; 120 GitHub stars."
+  ],
   "skills": [
     "React",
     "Next.js",

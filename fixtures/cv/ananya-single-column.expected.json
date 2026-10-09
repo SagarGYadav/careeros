@@ -23,6 +23,17 @@
     }
   ],
   "bulletCount": 9,
+  "bullets": [
+    "Rebuilt the merchant dashboard in Next.js and TypeScript, cutting page load time by 38%.",
+    "Built a shared component library with Storybook used by 4 product teams.",
+    "Introduced React Testing Library and Jest, raising unit test coverage from 22% to 71%.",
+    "Worked with designers in Figma to ship an accessible checkout flow meeting WCAG 2.1 AA.",
+    "Developed shipment-tracking screens in React with Redux Toolkit and REST APIs.",
+    "Reduced bundle size by 120 KB by code-splitting routes with React.lazy.",
+    "Fixed cross-browser layout issues for Safari and older Android browsers.",
+    "Works offline as a PWA with background sync.",
+    "Visualises monthly spending with Recharts."
+  ],
   "skills": [
     "JavaScript",
     "TypeScript",

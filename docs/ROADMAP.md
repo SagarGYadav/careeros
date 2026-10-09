@@ -24,9 +24,9 @@ session (local or cloud) can continue.
 ## Part 1 — core product (the four basic requirements)
 
 ### Phase 0 — Local setup (you + Claude, no app code)
-- [ ] Project folder outside OneDrive; git repo with `CLAUDE.md`, `docs/`, `.gitattributes` (LF line endings)
-- [ ] GitHub: public repo `careeros`; secret scanning + push protection on
-- [ ] Neon free account: project `careeros` with a `test` branch; both connection strings in `.env` (never committed)
+- [x] Project folder outside OneDrive; git repo with `CLAUDE.md`, `docs/`, `.gitattributes` (LF line endings)
+- [x] GitHub: public repo `careeros` created and pushed (check: secret scanning + push protection on)
+- [x] Neon free account: project `careeros` with a `test` branch (connection strings still to paste into `.env`); both connection strings in `.env` (never committed)
 - [ ] Optional, for cloud sessions later: Claude GitHub App on the repo + cloud environment (PROMPTS.md §5)
 
 ### Phase 1 — Foundation and design system · M · SPEC §2, §4 (auth), §21, §23, §25, §26

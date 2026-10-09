@@ -57,6 +57,7 @@ Keys go only in `.env` (git-ignored), never in chat messages or commits.
 ```
 Read CLAUDE.md, then the Phase 1 section of docs/ROADMAP.md and the SPEC sections it lists.
 The repo contains only the docs. The product name is CareerOS. I'm on Windows: keep npm scripts cross-platform.
+.env already holds my Neon URLs: add any missing variables with dev values, but never change or print existing values.
 
 Do step 1a only. First show a plan of at most 10 bullets (packages with versions, folder layout, any deviation from
 SPEC with the reason) and wait for my OK. Then build it, run typecheck and lint, apply the first migration to

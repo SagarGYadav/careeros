@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# environment files (secrets) - only the example is committed
+.env
+.env.*
+!.env.example
+
+# local data and uploads
+.data/
+
+# test output
+coverage/
+playwright-report/
+test-results/
+
+# logs and OS files
+*.log
+.DS_Store
+Thumbs.db

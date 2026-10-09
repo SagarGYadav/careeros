@@ -43,6 +43,9 @@ session (local or cloud) can continue.
 - **Accept:** fresh clone → install → migrate → dev works; sign up/in/out; both themes look finished; CI green.
 
 ### Phase 2 — CV upload and precise extraction · L · SPEC §4, §7.2–7.3, §8.1–8.4, §8.6, §9
+
+> **Where I stopped (2026-10-09):** Phase 1 is complete on branch `phase-1` (CI run 37905741206 was still running; check it, then merge `phase-1` into `main` via a PR). Step 2a just started: `ai`, `@ai-sdk/google`, `@ai-sdk/groq` and `@openrouter/ai-sdk-provider` are installed, no Phase 2 code yet. Notes for 2a: AI SDK v7 docs are in `node_modules/ai/docs`; structured output is `generateText({ output: Output.object({ schema }) })`; failures throw `NoObjectGeneratedError`; test mocks are `MockLanguageModelV4` from `ai/test`. Next: `lib/providers` ProviderChain with ProviderUsage/ProviderHealth models (app-wide, not per user), then `lib/ai`. Real-provider evals (2e) need free GEMINI_API_KEY, GROQ_API_KEY and OPENROUTER_API_KEY in `.env`.
+
 - [ ] 2a Provider chains and AI layer: `lib/providers` (quotas incl. provider-reported remaining, switch at 90%,
       cooldowns, circuit breaker, ProviderUsage), `lib/ai` (Gemini with PDF input → Groq → OpenRouter free models, mock,
       no-AI mode, `runStructured`, `wrapUntrusted`, injection pre-scan, AiRequestLog), Settings → Services, backup banner

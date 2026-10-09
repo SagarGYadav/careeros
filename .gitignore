@@ -1,24 +1,41 @@
 # dependencies
-node_modules/
+/node_modules
+/.pnp
+.pnp.*
 
 # Next.js build output
-.next/
-out/
+/.next/
+/out/
+/build
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
 
 # environment files (secrets) - only the example is committed
 .env
 .env.*
 !.env.example
 
+# generated Prisma client
+/src/generated/
+
 # local data and uploads
-.data/
+/.data/
 
 # test output
-coverage/
-playwright-report/
-test-results/
+/coverage
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
 
-# logs and OS files
+# deployment
+.vercel
+
+# logs, keys and OS files
 *.log
+npm-debug.log*
+*.pem
 .DS_Store
 Thumbs.db

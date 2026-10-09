@@ -1,0 +1,11 @@
+// CareerOS database schema. Models are added phase by phase (see docs/ROADMAP.md).
+// The connection URL lives in prisma.config.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

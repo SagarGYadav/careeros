@@ -31,7 +31,7 @@ session (local or cloud) can continue.
 - [ ] Optional, for cloud sessions later: Claude GitHub App on the repo + cloud environment (PROMPTS.md §5)
 
 ### Phase 1 — Foundation and design system · M · SPEC §2, §4 (auth), §21, §23, §25, §26
-- [ ] 1a Scaffold: Next.js + TypeScript strict + Tailwind + shadcn/ui, ESLint + Prettier, `@/` alias, Prisma with the
+- [x] 1a Scaffold: Next.js + TypeScript strict + Tailwind + shadcn/ui, ESLint + Prettier, `@/` alias, Prisma with the
       `vector` extension migration, `db:*` scripts, `.env.example`; optional `docker-compose.yml`; `scripts/cloud-db.sh`
       for cloud sessions
 - [ ] 1b Auth and app shell: Better Auth (email + password), sign-in/up, `ALLOW_SIGNUP`, protected `(app)` layout,
@@ -122,3 +122,10 @@ _(Claude fills this in)_
 
 ## Decisions
 _(date — decision — reason)_
+
+- 2026-10-09 — Prisma 7.10 (stable) instead of the 8.0 release candidate that npm tags `latest` — stability for a learning project; revisit when 8 is GA.
+- 2026-10-09 — Keep Next.js 16 `cacheComponents` on — matches the spec's streaming/skeleton UX; session and DB reads go inside `<Suspense>`.
+- 2026-10-09 — First migration written by hand (`CREATE EXTENSION vector`) because the schema has no models yet; applied with `migrate deploy` to both Neon branches.
+- 2026-10-09 — The pg driver warns that `sslmode=require` will be weakened in pg 9; `src/server/db.ts` upgrades it to `verify-full` (today's behaviour) without editing `.env`.
+- 2026-10-09 — shadcn/ui initialised with its new default `base-nova` style (Base UI primitives).
+- 2026-10-09 — Neon runs PostgreSQL 18.6 with pgvector 0.8.6 (spec assumed 16+; compatible).

@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "phase-*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # A throwaway Postgres with pgvector for integration and e2e tests. CI never uses the real Neon databases.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: careeros
+          POSTGRES_PASSWORD: careeros
+          POSTGRES_DB: careeros_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U careeros -d careeros_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://careeros:careeros@localhost:5432/careeros_test
+      DATABASE_URL_TEST: postgresql://careeros:careeros@localhost:5432/careeros_test
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0000
+      BETTER_AUTH_URL: http://localhost:3100
+      ALLOW_SIGNUP: "true"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (also generates the Prisma client)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatting
+        run: npm run format:check
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      # Fails on critical advisories. Known high ones are documented in docs/ROADMAP.md "Decisions" (not reachable:
+      # mysql2 is never used with Postgres; deepmerge-ts only merges our own Prisma config).
+      - name: Dependency audit (critical)
+        run: npm audit --omit=dev --audit-level=critical

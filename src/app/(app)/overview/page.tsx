@@ -24,7 +24,7 @@ async function Welcome() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Welcome, {firstName(user.name)}</CardTitle>
+        <CardTitle as="h2">Welcome, {firstName(user.name)}</CardTitle>
         <CardDescription>
           Your workspace is ready. Your job-search summary and next actions will appear here as you add your CV and
           start tracking jobs.

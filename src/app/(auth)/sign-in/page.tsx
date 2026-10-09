@@ -19,7 +19,7 @@ export default function SignInPage() {
       </Suspense>
       <Card>
         <CardHeader>
-          <CardTitle>Sign in</CardTitle>
+          <CardTitle as="h1">Sign in</CardTitle>
           <CardDescription>Welcome back to CareerOS.</CardDescription>
         </CardHeader>
         <CardContent>

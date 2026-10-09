@@ -39,7 +39,7 @@ session (local or cloud) can continue.
 - [x] 1c Design system: CareerOS brand, tokens (light/dark), page header, data table, form, toasts with undo,
       skeleton/empty/error states, progress-steps component, Indian number/LPA and date formatters, `AppError`,
       error boundary, JSON logger, `server-only` guards
-- [ ] 1d Quality gates: Vitest (unit + integration on `DATABASE_URL_TEST`), Playwright smoke test with axe, GitHub Actions CI
+- [x] 1d Quality gates: Vitest (unit + integration on `DATABASE_URL_TEST`), Playwright smoke test with axe, GitHub Actions CI
 - **Accept:** fresh clone → install → migrate → dev works; sign up/in/out; both themes look finished; CI green.
 
 ### Phase 2 — CV upload and precise extraction · L · SPEC §4, §7.2–7.3, §8.1–8.4, §8.6, §9
@@ -115,10 +115,19 @@ Each Part 2 phase is split into steps when it starts.
 ---
 
 ## What works
-_(Claude fills this in at the end of each phase)_
+
+**Phase 1 (foundation and design system)**
+- Sign up, sign in, sign out (Better Auth, email + password); `ALLOW_SIGNUP` switch; safe `?next=` redirects; Postgres-backed auth rate limits.
+- Protected app shell: sidebar driven by `src/config/navigation.ts` (only built sections), header, Ctrl/Cmd+K palette, light/dark/system theme.
+- Overview (welcome) and Settings (account, appearance, sign out); error, global-error and 404 pages.
+- Design system: tokens, brand, page header, data table (sort/filter/columns/pagination), empty/error states, progress steps, trust badges, confidence labels, toasts with undo, Indian number/LPA formatters. Gallery at `/dev/design` (development only).
+- Tests: 28 unit, 5 integration (Neon `test` branch: migrations, pgvector, cascade deletes, real auth handler), 8 e2e (Playwright on a production build against the test DB, axe WCAG 2.2 AA checks in both themes). CI workflow in `.github/workflows/ci.yml`.
 
 ## Known gaps
-_(Claude fills this in)_
+
+- Phase 1: no email verification or password reset (single-user app; add before opening sign-ups to others).
+- Phase 1: Better Auth skips rate limiting when it cannot determine a client IP (direct handler calls in tests); real HTTP requests are limited.
+- Phase 1: Overview shows only a welcome card until the CV and job phases add real content.
 
 ## Decisions
 _(date — decision — reason)_
@@ -137,3 +146,6 @@ _(date — decision — reason)_
 - 2026-10-09 — Design tokens: neutral greys + one indigo brand accent (OKLCH), success/warning/info, 8px radius, 13px `text-ui` size, reduced-motion rule. Chart colours deferred to the first chart (dataviz guidance).
 - 2026-10-09 — Error boundaries use Next 16's `retry()` prop; server errors only show `digest` as a reference. Logger redacts secret/personal keys.
 - 2026-10-09 — `/dev/design` component gallery for visual checks; public in development only, 404 in production.
+- 2026-10-09 — Tests: Vitest projects `unit` and `integration` (integration forces `DATABASE_URL = DATABASE_URL_TEST` and runs `migrate deploy` first); Playwright builds and serves on port 3100 against the test DB with a 15s expect timeout (Neon round-trips + password hashing).
+- 2026-10-09 — `npm audit`: CI fails on critical. Known high advisories accepted as unreachable: `mysql2` (pulled in by Prisma/Better Auth, never used with Postgres) and `deepmerge-ts` (Prisma config loader, only merges our own config). The `shadcn` CLI moved to devDependencies (its CSS is build-time only).
+- 2026-10-09 — `/node` 22 (Vitest 5 peer requirement; runtime is Node 22). `CardTitle` gained an `as` prop so auth pages have an `<h1>` and cards under a page header use `<h2>`.

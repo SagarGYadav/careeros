@@ -18,7 +18,7 @@ export default function SignUpPage() {
       </Suspense>
       <Card>
         <CardHeader>
-          <CardTitle>{ALLOW_SIGNUP ? "Create your account" : "Sign-ups are closed"}</CardTitle>
+          <CardTitle as="h1">{ALLOW_SIGNUP ? "Create your account" : "Sign-ups are closed"}</CardTitle>
           <CardDescription>
             {ALLOW_SIGNUP
               ? "Your CV, jobs and applications stay private to your account."

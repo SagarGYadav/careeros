@@ -15,7 +15,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Your account and preferences." />
       <Card>
         <CardHeader>
-          <CardTitle>Account</CardTitle>
+          <CardTitle as="h2">Account</CardTitle>
           <CardDescription>Signed in with email and password.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -26,7 +26,7 @@ export default function SettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Appearance</CardTitle>
+          <CardTitle as="h2">Appearance</CardTitle>
           <CardDescription>Light, dark, or follow your system setting.</CardDescription>
         </CardHeader>
         <CardContent>

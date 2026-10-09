@@ -82,6 +82,7 @@ scripts/                cloud-db.sh and other dev scripts
 - `npm run dev` · `npm run build` · `npm run typecheck` · `npm run lint` · `npm run format` · `npm test` · `npm run test:e2e`
 - `npm run db:migrate` (new migration, dev DB) · `npm run db:deploy` · `npm run db:test:deploy` (apply to test DB)
 - `npm run db:check` / `npm run db:check:test` (read-only connection + pgvector check) · `npm run db:seed` · `npm run db:reset`
+- Tests: `npm test` (unit + integration), `npm run test:unit`, `npm run test:integration` (uses `DATABASE_URL_TEST`), `npm run test:e2e` (builds and serves on port 3100 against the test DB; screenshots in `test-results/screens`).
 - Database: local development uses `DATABASE_URL` / `DATABASE_URL_TEST` from `.env` (Neon `main` and `test`
   branches, or `docker compose up -d`). Cloud sessions: run `bash scripts/cloud-db.sh` once at session start.
 - Developed on Windows: keep npm scripts cross-platform (Node scripts, no bash-only syntax); LF line endings via

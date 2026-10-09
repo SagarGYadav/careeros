@@ -1,0 +1,53 @@
+{
+  "id": "rohan-two-column",
+  "personal": {
+    "fullName": "Rohan Mehta",
+    "email": "rohan.mehta@example.com",
+    "phone": "+91 98765 43211",
+    "linkedin": "https://www.linkedin.com/in/rohan-mehta-example",
+    "github": "https://github.com/rohan-mehta-example",
+    "portfolio": "https://rohanmehta.example.dev"
+  },
+  "experience": [
+    {
+      "company": "Quill Commerce",
+      "title": "Senior Software Engineer",
+      "start": "2022-01",
+      "end": null
+    },
+    {
+      "company": "Banyan Analytics",
+      "title": "Software Engineer",
+      "start": "2019-06",
+      "end": "2021-12"
+    }
+  ],
+  "bulletCount": 8,
+  "skills": [
+    "React",
+    "Next.js",
+    "TypeScript",
+    "Redux",
+    "Node.js",
+    "Express",
+    "REST APIs",
+    "GraphQL",
+    "PostgreSQL",
+    "MongoDB",
+    "Redis",
+    "Docker",
+    "AWS",
+    "GitHub Actions"
+  ],
+  "education": [
+    {
+      "institution": "College of Engineering, Pune",
+      "degree": "B.E.",
+      "grade": "76%"
+    }
+  ],
+  "certifications": [
+    "AWS Certified Developer – Associate"
+  ],
+  "jobSearch": null
+}

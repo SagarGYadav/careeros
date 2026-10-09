@@ -1,0 +1,46 @@
+{
+  "id": "sneha-docx",
+  "personal": {
+    "fullName": "Sneha Kulkarni",
+    "email": "sneha.kulkarni@example.com",
+    "phone": "+91 98765 43212",
+    "linkedin": "https://www.linkedin.com/in/sneha-kulkarni-example",
+    "github": null,
+    "portfolio": null
+  },
+  "experience": [
+    {
+      "company": "Marigold Health",
+      "title": "React Native Developer",
+      "start": "2023-02",
+      "end": null
+    },
+    {
+      "company": "Peregrine Mobility",
+      "title": "Junior Mobile Developer",
+      "start": "2022-06",
+      "end": "2023-01"
+    }
+  ],
+  "bulletCount": 6,
+  "skills": [
+    "React Native",
+    "Expo",
+    "Android",
+    "TypeScript",
+    "JavaScript",
+    "Redux",
+    "Firebase",
+    "REST APIs",
+    "Jest"
+  ],
+  "education": [
+    {
+      "institution": "Jawaharlal Nehru Technological University",
+      "degree": "B.Tech",
+      "grade": "7.9 CGPA"
+    }
+  ],
+  "certifications": [],
+  "jobSearch": null
+}

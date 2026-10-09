@@ -16,17 +16,28 @@ datasource db {
 // ---------------------------------------------------------------------------------------------------------------
 
 model User {
-  id            String          @id
-  name          String
-  email         String          @unique
-  emailVerified Boolean         @default(false)
-  image         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @default(now()) @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  aiResults     AiResultCache[]
-  aiRequests    AiRequestLog[]
+  id             String               @id
+  name           String
+  email          String               @unique
+  emailVerified  Boolean              @default(false)
+  image          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @default(now()) @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  aiResults      AiResultCache[]
+  aiRequests     AiRequestLog[]
+  personal       PersonalDetails?
+  profile        CareerProfile?
+  skills         UserSkill[]
+  experiences    ExperienceEntry[]
+  projects       ProjectEntry[]
+  educations     EducationEntry[]
+  certifications CertificationEntry[]
+  otherSections  OtherCvSection[]
+  facts          CareerFact[]
+  resumes        ResumeVersion[]
+  files          StoredFile[]
 
   @@map("users")
 }
@@ -173,4 +184,329 @@ model AiResultCache {
 
   @@id([userId, workflow, inputHash])
   @@map("ai_result_cache")
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Career profile and CV (SPEC §4, §9). Dates on CV entries are "YYYY-MM" strings: CVs often give only a year or
+// a month, and durations are computed in code from these.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Contact and personal details. Sensitive: never used for matching, never sent to search providers, never logged.
+model PersonalDetails {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName     String?
+  email        String?
+  phone        String?
+  city         String?
+  state        String?
+  country      String?
+  linkedinUrl  String?
+  githubUrl    String?
+  portfolioUrl String?
+  otherLinks   String[]
+  /// Only what the CV itself contains, e.g. date of birth or languages known.
+  otherDetails Json?
+  updatedAt    DateTime @updatedAt
+
+  @@map("personal_details")
+}
+
+model CareerProfile {
+  userId                String    @id
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline              String?
+  summary               String?
+  /// Computed from experience dates (overlaps merged), not taken from the AI.
+  yearsExperience       Float?
+  /// Annual amounts in `currency`. INR is shown as LPA.
+  currentCtc            Int?
+  expectedCtcMin        Int?
+  expectedCtcMax        Int?
+  currency              String    @default("INR")
+  noticePeriodDays      Int?
+  preferredLocations    String[]
+  /// remote | hybrid | onsite
+  workModes             String[]
+  openToRelocate        Boolean   @default(false)
+  /// { bond, nightShift, contractToHire, maxWfoDaysPerWeek }: conditions the user never accepts.
+  dealbreakers          Json?
+  domains               String[]
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("career_profiles")
+}
+
+/// Role catalogue used to suggest and categorise target roles (seeded, editable).
+model RoleFamily {
+  id             String            @id @default(cuid())
+  slug           String            @unique
+  name           String
+  description    String?
+  titleVariants  String[]
+  /// [{ level, minYears, maxYears }]
+  seniorityBands Json
+  adjacentSlugs  String[]
+  coreSkills     RoleFamilySkill[]
+
+  @@map("role_families")
+}
+
+model RoleFamilySkill {
+  roleFamilyId String
+  roleFamily   RoleFamily @relation(fields: [roleFamilyId], references: [id], onDelete: Cascade)
+  skillId      String
+  skill        Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([roleFamilyId, skillId])
+  @@map("role_family_skills")
+}
+
+/// Skill taxonomy. ownerKey is "global" for the seeded catalogue, or a user id for skills a user added.
+model Skill {
+  id             String            @id @default(cuid())
+  ownerKey       String            @default("global")
+  slug           String
+  name           String
+  /// language | framework | library | styling | mobile | backend | database | testing | tooling | cloud | practice | data | soft
+  category       String
+  aliases        String[]
+  /// 1 small, 2 medium, 3 large (rough effort to learn)
+  learningEffort Int               @default(2)
+  /// Curated free resources: [{ title, url }]. The AI never generates these links.
+  resources      Json?
+  /// A user-added skill not yet reviewed against the catalogue.
+  unreviewed     Boolean           @default(false)
+  roleFamilies   RoleFamilySkill[]
+  relationsFrom  SkillRelation[]   @relation("from")
+  relationsTo    SkillRelation[]   @relation("to")
+  userSkills     UserSkill[]
+
+  @@unique([ownerKey, slug])
+  @@map("skills")
+}
+
+/// "implies": knowing `from` means knowing `to` (Next.js implies React). "related": partial credit (Redux ~ Zustand).
+model SkillRelation {
+  fromSkillId String
+  from        Skill  @relation("from", fields: [fromSkillId], references: [id], onDelete: Cascade)
+  toSkillId   String
+  to          Skill  @relation("to", fields: [toSkillId], references: [id], onDelete: Cascade)
+  type        String
+
+  @@id([fromSkillId, toSkillId])
+  @@map("skill_relations")
+}
+
+model UserSkill {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId           String
+  skill             Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  /// 1 to 5
+  proficiency       Int
+  /// user | rule | ai_suggested
+  proficiencySource String
+  proficiencyReason String?
+  years             Float?
+  lastUsedYear      Int?
+  /// CV evidence ids (E-ids) where the skill appears.
+  evidenceIds       String[]
+  /// cv_section | cv_inferred | self | import
+  source            String
+  confirmed         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, skillId])
+  @@map("user_skills")
+}
+
+model UserSkillHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  skillId     String
+  proficiency Int
+  changedAt   DateTime @default(now())
+
+  @@index([userId, skillId, changedAt])
+  @@map("user_skill_history")
+}
+
+model ExperienceEntry {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        String
+  title          String
+  employmentType String?
+  location       String?
+  workMode       String?
+  startDate      String?
+  endDate        String?
+  isCurrent      Boolean  @default(false)
+  durationMonths Int?
+  domain         String?
+  teamSize       String?
+  summary        String?
+  /// [{ id: "E3", text, kind: "responsibility" | "achievement", hasMetric }]
+  bullets        Json
+  technologies   String[]
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, sortOrder])
+  @@map("experience_entries")
+}
+
+model ProjectEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  role         String?
+  description  String?
+  technologies String[]
+  links        String[]
+  startDate    String?
+  endDate      String?
+  /// [{ id: "E9", text }]
+  bullets      Json
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, sortOrder])
+  @@map("project_entries")
+}
+
+model EducationEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution String
+  degree      String?
+  field       String?
+  startDate   String?
+  endDate     String?
+  /// As written, e.g. "8.4 CGPA" or "78%".
+  grade       String?
+  location    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, sortOrder])
+  @@map("education_entries")
+}
+
+model CertificationEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  issuer       String?
+  issueDate    String?
+  expiryDate   String?
+  credentialId String?
+  url          String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, sortOrder])
+  @@map("certification_entries")
+}
+
+/// Awards, publications, volunteering, spoken languages, interests and anything else: nothing in the CV is dropped.
+model OtherCvSection {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String?
+  items     Json
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, sortOrder])
+  @@map("other_cv_sections")
+}
+
+/// Career memory (SPEC §20). The AI may only add `pending` facts; only `active` facts are ever sent to the AI.
+model CareerFact {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  /// preference | strength | goal | constraint | learning
+  category  String
+  /// user | ai_suggested | import
+  source    String
+  /// active | pending | archived
+  status    String
+  evidence  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@map("career_facts")
+}
+
+/// Uploaded files, stored in Postgres (STORAGE_PROVIDER=database): free, and fine for a few small CVs.
+model StoredFile {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  sha256    String
+  bytes     Bytes
+  createdAt DateTime        @default(now())
+  resumes   ResumeVersion[]
+
+  @@index([userId, sha256])
+  @@map("stored_files")
+}
+
+model ResumeVersion {
+  id                 String          @id @default(cuid())
+  userId             String
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  targetRoleFamilyId String?
+  parentId           String?
+  parent             ResumeVersion?  @relation("lineage", fields: [parentId], references: [id], onDelete: SetNull)
+  children           ResumeVersion[] @relation("lineage")
+  isDefault          Boolean         @default(false)
+  fileId             String?
+  file               StoredFile?     @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  extractedText      String?
+  pageCount          Int?
+  /// Hyperlinks found in the file: [{ text, url, page }]
+  links              Json?
+  /// ParsedCv (SPEC §9.2) as confirmed or edited by the user.
+  parsed             Json?
+  /// CV evidence catalog: [{ id: "E1", text, section, location }]
+  evidence           Json?
+  /// Verification report: grounding, completeness, deterministic overrides (SPEC §9.1).
+  verification       Json?
+  /// uploaded | parsed | confirmed | failed
+  parseStatus        String          @default("uploaded")
+  /// ai | cache | no_ai
+  parseMode          String?
+  parseProvider      String?
+  injectionSuspected Boolean         @default(false)
+  confirmedAt        DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([userId, createdAt])
+  @@map("resume_versions")
 }

@@ -1,0 +1,52 @@
+{
+  "id": "ananya-single-column",
+  "personal": {
+    "fullName": "Ananya Iyer",
+    "email": "ananya.iyer@example.com",
+    "phone": "+91 98765 43210",
+    "linkedin": "https://www.linkedin.com/in/ananya-iyer-example",
+    "github": "https://github.com/ananya-iyer-example",
+    "portfolio": null
+  },
+  "experience": [
+    {
+      "company": "Kestrel Pay",
+      "title": "Frontend Developer",
+      "start": "2023-04",
+      "end": null
+    },
+    {
+      "company": "Lumen Logistics",
+      "title": "Associate Software Engineer",
+      "start": "2021-07",
+      "end": "2023-03"
+    }
+  ],
+  "bulletCount": 9,
+  "skills": [
+    "JavaScript",
+    "TypeScript",
+    "HTML",
+    "CSS",
+    "React",
+    "Next.js",
+    "Redux Toolkit",
+    "Tailwind CSS",
+    "Jest",
+    "React Testing Library",
+    "Storybook",
+    "Git",
+    "Figma"
+  ],
+  "education": [
+    {
+      "institution": "PES University",
+      "degree": "B.Tech",
+      "grade": "8.4 CGPA"
+    }
+  ],
+  "certifications": [
+    "Meta Front-End Developer Professional Certificate"
+  ],
+  "jobSearch": null
+}

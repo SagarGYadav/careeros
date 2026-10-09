@@ -1,0 +1,38 @@
+{
+  "id": "arjun-linked-text",
+  "personal": {
+    "fullName": "Arjun Desai",
+    "email": "arjun.desai@example.com",
+    "phone": "+91 98765 43215",
+    "linkedin": "https://www.linkedin.com/in/arjun-desai-example",
+    "github": "https://github.com/arjun-desai-example",
+    "portfolio": "https://arjundesai.example.dev"
+  },
+  "experience": [
+    {
+      "company": "Banyan Analytics",
+      "title": "Frontend Engineer",
+      "start": "2023-07",
+      "end": null
+    }
+  ],
+  "bulletCount": 5,
+  "skills": [
+    "Next.js",
+    "React",
+    "TypeScript",
+    "Tailwind CSS",
+    "TanStack Query",
+    "Vercel",
+    "Git"
+  ],
+  "education": [
+    {
+      "institution": "University of Mumbai",
+      "degree": "B.Sc.",
+      "grade": "9.1 CGPA"
+    }
+  ],
+  "certifications": [],
+  "jobSearch": null
+}

@@ -23,7 +23,11 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:watch": "vitest --project unit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:seed": "tsx --conditions=react-server prisma/seed/index.ts",
+    "db:seed:test": "node scripts/with-test-db.mjs tsx --conditions=react-server prisma/seed/index.ts",
+    "db:migrate:create": "prisma migrate dev --create-only",
+    "fixtures:cv": "tsx scripts/make-fixtures.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.93",
@@ -59,6 +63,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "docx": "^9.9.0",
     "dotenv": "^18.0.6",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",

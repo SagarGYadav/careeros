@@ -1,0 +1,56 @@
+{
+  "id": "priya-indian-format",
+  "personal": {
+    "fullName": "Priya Sharma",
+    "email": "priya.sharma@example.com",
+    "phone": "+91 98765 43214",
+    "linkedin": null,
+    "github": null,
+    "portfolio": null
+  },
+  "experience": [
+    {
+      "company": "Orbit Learning Pvt. Ltd.",
+      "title": "Software Engineer",
+      "start": "2022-05",
+      "end": null
+    },
+    {
+      "company": "Brightline Insurance Services",
+      "title": "Associate Developer",
+      "start": "2021-01",
+      "end": "2022-04"
+    }
+  ],
+  "bulletCount": 5,
+  "skills": [
+    "Angular",
+    "React",
+    "TypeScript",
+    "JavaScript",
+    "RxJS",
+    "Material UI",
+    "HTML",
+    "CSS"
+  ],
+  "education": [
+    {
+      "institution": "Guru Gobind Singh Indraprastha University",
+      "degree": "B.Tech",
+      "grade": "72%"
+    }
+  ],
+  "certifications": [
+    "Angular – The Complete Guide"
+  ],
+  "jobSearch": {
+    "noticePeriod": "60 days",
+    "currentCtc": "8.5 LPA",
+    "expectedCtc": "12 LPA",
+    "preferredLocations": [
+      "Gurugram",
+      "Noida",
+      "Remote"
+    ]
+  }
+}

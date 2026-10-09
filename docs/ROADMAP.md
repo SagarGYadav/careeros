@@ -47,7 +47,7 @@ session (local or cloud) can continue.
 - [x] 2a Provider chains and AI layer: `lib/providers` (quotas incl. provider-reported remaining, switch at 90%,
       cooldowns, circuit breaker, ProviderUsage), `lib/ai` (Gemini with PDF input → Groq → OpenRouter free models, mock,
       no-AI mode, `runStructured`, `wrapUntrusted`, injection pre-scan, AiRequestLog), Settings → Services, backup banner
-- [ ] 2b Data model, seed, fixtures: PersonalDetails, CareerProfile, RoleFamily, Skill, SkillRelation, UserSkill,
+- [x] 2b Data model, seed, fixtures: PersonalDetails, CareerProfile, RoleFamily, Skill, SkillRelation, UserSkill,
       UserSkillHistory, CV entry tables, OtherCvSection, CareerFact, ResumeVersion, StoredFile; role catalog, ~150 skills,
       relations; `scripts/make-fixtures.ts` (six fictional CVs)
 - [ ] 2c CV pipeline: storage, text with pages, link annotations, regex extractors, section detection, ResumeParser

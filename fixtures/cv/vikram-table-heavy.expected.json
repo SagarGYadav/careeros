@@ -1,0 +1,51 @@
+{
+  "id": "vikram-table-heavy",
+  "personal": {
+    "fullName": "Vikram Nair",
+    "email": "vikram.nair@example.com",
+    "phone": "+91 98765 43213",
+    "linkedin": "https://www.linkedin.com/in/vikram-nair-example",
+    "github": null,
+    "portfolio": "https://vikramnair.example.dev"
+  },
+  "experience": [
+    {
+      "company": "Saffron Retail Tech",
+      "title": "UI Engineer",
+      "start": "2022-08",
+      "end": null
+    },
+    {
+      "company": "Tidewater Fintech",
+      "title": "Frontend Developer",
+      "start": "2020-07",
+      "end": "2022-07"
+    }
+  ],
+  "bulletCount": 5,
+  "skills": [
+    "HTML",
+    "CSS",
+    "JavaScript",
+    "TypeScript",
+    "React",
+    "Vue.js",
+    "Storybook",
+    "Figma",
+    "Design systems",
+    "Web accessibility",
+    "Web performance",
+    "Jest"
+  ],
+  "education": [
+    {
+      "institution": "Anna University",
+      "degree": "B.E.",
+      "grade": "8.1 CGPA"
+    }
+  ],
+  "certifications": [
+    "Web Accessibility Specialist (WAS)"
+  ],
+  "jobSearch": null
+}

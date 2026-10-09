@@ -5,3 +5,4 @@ package-lock.json
 prisma/migrations
 docs
 *.md
+fixtures/cv/*.expected.json

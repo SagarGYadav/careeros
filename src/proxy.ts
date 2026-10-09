@@ -1,7 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
-const PUBLIC_PATHS = new Set(["/sign-in", "/sign-up"]);
+const PUBLIC_PATHS = new Set([
+  "/sign-in",
+  "/sign-up",
+  // Fetched by link-preview crawlers, which never have a session.
+  "/opengraph-image",
+  // Development-only component gallery (returns 404 in production).
+  ...(process.env.NODE_ENV === "production" ? [] : ["/dev/design"]),
+]);
 
 /**
  * Optimistic check only: sends visitors without a session cookie to sign-in. It does not validate the session;

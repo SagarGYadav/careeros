@@ -25,6 +25,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@tanstack/react-table": "^9.2.8",
     "better-auth": "^1.7.7",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",

@@ -15,6 +15,11 @@ const badgeVariants = cva(
         outline: "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost: "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // CareerOS semantic variants (SPEC §21)
+        brand: "bg-brand/10 text-brand dark:bg-brand/20",
+        success: "bg-success/10 text-success dark:bg-success/20",
+        warning: "bg-warning/15 text-warning dark:bg-warning/20",
+        info: "bg-info/10 text-info dark:bg-info/20",
       },
     },
     defaultVariants: {

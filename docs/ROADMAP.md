@@ -36,7 +36,7 @@ session (local or cloud) can continue.
       for cloud sessions
 - [x] 1b Auth and app shell: Better Auth (email + password), sign-in/up, `ALLOW_SIGNUP`, protected `(app)` layout,
       sidebar from a `features` config, header, theme toggle, ⌘K (navigation only)
-- [ ] 1c Design system: CareerOS brand, tokens (light/dark), page header, data table, form, toasts with undo,
+- [x] 1c Design system: CareerOS brand, tokens (light/dark), page header, data table, form, toasts with undo,
       skeleton/empty/error states, progress-steps component, Indian number/LPA and date formatters, `AppError`,
       error boundary, JSON logger, `server-only` guards
 - [ ] 1d Quality gates: Vitest (unit + integration on `DATABASE_URL_TEST`), Playwright smoke test with axe, GitHub Actions CI
@@ -133,3 +133,7 @@ _(date — decision — reason)_
 - 2026-10-09 — Auth: Better Auth email+password, Postgres-backed rate limits on every environment (sign-in 10/min, sign-up 5/min). `proxy.ts` only does the optimistic cookie check; pages validate with `getCurrentUser()` (`"use cache: private"`, inside `<Suspense>`). Signed-in users are redirected away from sign-in by the page, not the proxy, to avoid a redirect loop with stale cookies.
 - 2026-10-09 — shadcn `SidebarMenuSkeleton` used `Math.random()`, which Next 16 rejects while prerendering; changed to a fixed width. `use-mobile` rewritten with `useSyncExternalStore` (lint rule).
 - 2026-10-09 — Local test account `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` lives in `.env` (password generated, never printed).
+- 2026-10-09 — TanStack Table 9.2 (current stable) adopted instead of v8: features registered explicitly in `dataTableFeatures`; columns built with `dataTableColumns<T>()` at module scope.
+- 2026-10-09 — Design tokens: neutral greys + one indigo brand accent (OKLCH), success/warning/info, 8px radius, 13px `text-ui` size, reduced-motion rule. Chart colours deferred to the first chart (dataviz guidance).
+- 2026-10-09 — Error boundaries use Next 16's `retry()` prop; server errors only show `digest` as a reference. Logger redacts secret/personal keys.
+- 2026-10-09 — `/dev/design` component gallery for visual checks; public in development only, 404 in production.

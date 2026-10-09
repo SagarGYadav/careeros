@@ -34,7 +34,7 @@ session (local or cloud) can continue.
 - [x] 1a Scaffold: Next.js + TypeScript strict + Tailwind + shadcn/ui, ESLint + Prettier, `@/` alias, Prisma with the
       `vector` extension migration, `db:*` scripts, `.env.example`; optional `docker-compose.yml`; `scripts/cloud-db.sh`
       for cloud sessions
-- [ ] 1b Auth and app shell: Better Auth (email + password), sign-in/up, `ALLOW_SIGNUP`, protected `(app)` layout,
+- [x] 1b Auth and app shell: Better Auth (email + password), sign-in/up, `ALLOW_SIGNUP`, protected `(app)` layout,
       sidebar from a `features` config, header, theme toggle, ⌘K (navigation only)
 - [ ] 1c Design system: CareerOS brand, tokens (light/dark), page header, data table, form, toasts with undo,
       skeleton/empty/error states, progress-steps component, Indian number/LPA and date formatters, `AppError`,
@@ -129,3 +129,7 @@ _(date — decision — reason)_
 - 2026-10-09 — The pg driver warns that `sslmode=require` will be weakened in pg 9; `src/server/db.ts` upgrades it to `verify-full` (today's behaviour) without editing `.env`.
 - 2026-10-09 — shadcn/ui initialised with its new default `base-nova` style (Base UI primitives).
 - 2026-10-09 — Neon runs PostgreSQL 18.6 with pgvector 0.8.6 (spec assumed 16+; compatible).
+- 2026-10-09 — Prisma 7 no longer regenerates the client after `migrate dev`; `npm run db:migrate` now runs `prisma generate` too (a stale client made Better Auth report missing tables).
+- 2026-10-09 — Auth: Better Auth email+password, Postgres-backed rate limits on every environment (sign-in 10/min, sign-up 5/min). `proxy.ts` only does the optimistic cookie check; pages validate with `getCurrentUser()` (`"use cache: private"`, inside `<Suspense>`). Signed-in users are redirected away from sign-in by the page, not the proxy, to avoid a redirect loop with stale cookies.
+- 2026-10-09 — shadcn `SidebarMenuSkeleton` used `Math.random()`, which Next 16 rejects while prerendering; changed to a fixed width. `use-mobile` rewritten with `useSyncExternalStore` (lint rule).
+- 2026-10-09 — Local test account `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` lives in `.env` (password generated, never printed).

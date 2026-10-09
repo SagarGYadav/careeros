@@ -1,9 +1,8 @@
-// Temporary home page for step 1a; replaced by sign-in and the app shell in step 1b.
+import { redirect } from "next/navigation";
+import { DEFAULT_SIGNED_IN_PATH } from "@/lib/safe-redirect";
+
+// Signed-out visitors never reach this page: proxy.ts sends them to /sign-in first.
+// A public landing page replaces this in Phase 14.
 export default function Home() {
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">CareerOS</h1>
-      <p className="text-sm text-muted-foreground">Personal career intelligence. Foundation in progress.</p>
-    </main>
-  );
+  redirect(DEFAULT_SIGNED_IN_PATH);
 }

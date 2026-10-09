@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
+import { ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrentUser } from "@/server/auth/session";
 import { AppearanceSetting } from "./appearance-setting";
@@ -31,6 +34,18 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <AppearanceSetting />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Services</CardTitle>
+          <CardDescription>AI providers, their free limits and automatic backups.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" nativeButton={false} render={<Link href="/settings/services" />}>
+            Manage services
+            <ChevronRight />
+          </Button>
         </CardContent>
       </Card>
     </>

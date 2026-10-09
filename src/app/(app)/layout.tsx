@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-shell/app-sidebar";
 import { CommandMenu } from "@/components/app-shell/command-menu";
 import { UserMenu, UserMenuSkeleton } from "@/components/app-shell/user-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AiServiceBanner } from "@/features/services/ai-status";
 
 // The shell prerenders as a static shell; only the user menu (and page content that reads data) streams in
 // behind <Suspense>, so navigation feels instant (node_modules/next/dist/docs: authentication-with-cache-components).
@@ -19,7 +20,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
       <SidebarInset>
         <AppHeader />
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-6">{children}</div>
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-6">
+          <Suspense fallback={null}>
+            <AiServiceBanner />
+          </Suspense>
+          {children}
+        </div>
       </SidebarInset>
       <CommandMenu />
     </SidebarProvider>

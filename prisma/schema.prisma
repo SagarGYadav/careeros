@@ -16,15 +16,17 @@ datasource db {
 // ---------------------------------------------------------------------------------------------------------------
 
 model User {
-  id            String    @id
+  id            String          @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String          @unique
+  emailVerified Boolean         @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now()) @updatedAt
   sessions      Session[]
   accounts      Account[]
+  aiResults     AiResultCache[]
+  aiRequests    AiRequestLog[]
 
   @@map("users")
 }
@@ -84,4 +86,91 @@ model RateLimit {
   lastRequest BigInt // epoch milliseconds
 
   @@map("rate_limits")
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// External services (SPEC §7.2–7.3). Quotas belong to the app's API keys, so usage and health are app-wide,
+// not per user.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Request counters per provider and period, used to stop before a free quota runs out.
+model ProviderUsage {
+  id          String   @id @default(cuid())
+  service     String // ai | job_search | web_search | embeddings
+  provider    String
+  periodKind  String // minute | day | month
+  periodStart DateTime
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([service, provider, periodKind, periodStart])
+  @@map("provider_usage")
+}
+
+/// Live health of each provider: cooldowns after 429s, quota exhaustion and the circuit breaker.
+model ProviderHealth {
+  service             String
+  provider            String
+  cooldownUntil       DateTime?
+  exhaustedUntil      DateTime?
+  reportedRemaining   Int?
+  consecutiveFailures Int       @default(0)
+  circuitOpenUntil    DateTime?
+  lastErrorKind       String?
+  lastFailureAt       DateTime?
+  lastSuccessAt       DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  @@id([service, provider])
+  @@map("provider_health")
+}
+
+/// Order and on/off overrides set in Settings → Services (defaults come from the *_PROVIDERS env lists).
+model ProviderSetting {
+  service   String   @id
+  order     String[]
+  disabled  String[]
+  updatedAt DateTime @updatedAt
+
+  @@map("provider_settings")
+}
+
+/// One row per AI call attempt. Never stores prompt or output content (SPEC §8.5).
+model AiRequestLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workflow       String
+  promptVersion  String
+  provider       String
+  model          String
+  status         String // ok | repaired | invalid_output | error
+  errorKind      String?
+  inputTokens    Int?
+  outputTokens   Int?
+  latencyMs      Int
+  fallbackFrom   String?
+  fallbackReason String?
+  inputHash      String
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([provider, createdAt])
+  @@map("ai_request_logs")
+}
+
+/// Validated AI outputs keyed by a hash of the exact input, so identical requests never call the AI twice.
+model AiResultCache {
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow      String
+  inputHash     String
+  promptVersion String
+  output        Json
+  provider      String
+  model         String
+  createdAt     DateTime @default(now())
+
+  @@id([userId, workflow, inputHash])
+  @@map("ai_result_cache")
 }

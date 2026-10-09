@@ -41,13 +41,25 @@ test("a new user can sign up and lands on the overview", async ({ page }) => {
   await screenshot(page, "overview");
 });
 
+// Signed-in tests reuse one saved session instead of signing in for each test: the app rate-limits sign-ins
+// (10 per minute), and repeated runs would otherwise trip it.
+const AUTH_FILE = "test-results/.auth/e2e-user.json";
+
+test("an existing user can sign in", async ({ page }) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByLabel("Password").fill(user.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+  await page.context().storageState({ path: AUTH_FILE });
+});
+
 test.describe("signed in", () => {
+  test.use({ storageState: AUTH_FILE });
+
   test.beforeEach(async ({ page }) => {
-    await page.goto("/sign-in");
-    await page.getByLabel("Email").fill(user.email);
-    await page.getByLabel("Password").fill(user.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/overview$/);
+    await page.goto("/overview");
+    await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
   });
 
   test("the command palette navigates with the keyboard", async ({ page }) => {
@@ -75,6 +87,20 @@ test.describe("signed in", () => {
     const response = await page.goto("/this-page-does-not-exist");
     expect(response?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  });
+
+  test("settings shows the AI provider chain and the mock AI badge", async ({ page }) => {
+    // The e2e server runs with AI_PROVIDERS=mock, so the UI must say answers are samples (CLAUDE.md rule 3).
+    await expect(page.getByRole("link", { name: /Mock AI/ })).toBeVisible();
+    await page.goto("/settings");
+    await page.getByRole("button", { name: "Manage services" }).click();
+    await expect(page).toHaveURL(/\/settings\/services$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Services" })).toBeVisible();
+    await expect(page.getByText("Mock AI (sample answers)", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Test" }).first().click();
+    await expect(page.getByText(/Connected/)).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "services");
   });
 
   test("signing out ends the session", async ({ page }) => {

@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { AiStatusBadge } from "@/features/services/ai-status";
 import { CommandMenuButton } from "./command-menu";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -8,6 +10,10 @@ export function AppHeader() {
       <SidebarTrigger className="-ml-1" />
       <div className="mr-1 h-4 w-px bg-border" aria-hidden="true" />
       <div className="ml-auto flex items-center gap-2">
+        {/* Reads live provider state, so it streams in without delaying the header. */}
+        <Suspense fallback={null}>
+          <AiStatusBadge />
+        </Suspense>
         <CommandMenuButton />
         <ThemeToggle />
       </div>

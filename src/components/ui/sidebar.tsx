@@ -567,7 +567,6 @@ function SidebarMenuSkeleton({
   /** CareerOS change: a fixed width instead of shadcn's Math.random(), which Next.js 16 rejects while prerendering. */
   width?: string;
 }) {
-
   return (
     <div
       data-slot="sidebar-menu-skeleton"

@@ -153,18 +153,32 @@ describe("CV verification", () => {
 
   it("re-extracts only an incomplete section in a second pass", async () => {
     const { bytes, fileName, kind } = fixture("vikram-table-heavy");
-    const requests: (string | null)[] = [];
+    const requests: (string[] | null)[] = [];
     const parse: CvParseFn = async (request) => {
-      requests.push(request.onlySection?.kind ?? null);
+      requests.push(request.onlySections?.kinds ?? null);
       const parsed = parseCvHeuristically({ text: request.text, links: request.links });
       // The first answer drops the second role's bullets.
-      if (!request.onlySection) parsed.experience[1].bullets = [];
+      if (!request.onlySections) parsed.experience[1].bullets = [];
       return { parsed, mode: "ai", provider: "test", model: "test", injectionSuspected: false };
     };
     const { draft, report } = await analyseCv({ bytes, kind, fileName }, { parse, now: NOW });
-    expect(requests).toEqual([null, "experience"]);
+    expect(requests).toEqual([null, ["experience"]]);
     expect(report.completeness.secondPass).toEqual({ requested: ["experience"], improved: ["experience"] });
     expect(draft.experience[1].bullets).toHaveLength(2);
+  });
+
+  it("keeps the first answer when the re-read fails", async () => {
+    const { bytes, fileName, kind } = fixture("vikram-table-heavy");
+    const parse: CvParseFn = async (request) => {
+      if (request.onlySections) throw new Error("every provider timed out");
+      const parsed = parseCvHeuristically({ text: request.text, links: request.links });
+      parsed.experience[1].bullets = [];
+      return { parsed, mode: "ai", provider: "test", model: "test", injectionSuspected: false };
+    };
+    const { draft, report } = await analyseCv({ bytes, kind, fileName }, { parse, now: NOW });
+    expect(report.completeness.secondPass).toEqual({ requested: ["experience"], improved: [], failed: true });
+    expect(draft.experience[1].bullets).toHaveLength(0);
+    expect(report.flags.some((f) => f.issue === "section_incomplete" && f.path === "experience")).toBe(true);
   });
 
   it("flags suspected prompt injection in the CV text", async () => {

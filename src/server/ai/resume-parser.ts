@@ -132,10 +132,11 @@ function linksBlock(links: CvLink[]): string {
 }
 
 function instructionsFor(request: CvParseRequest): string {
-  if (request.onlySection) {
+  if (request.onlySections) {
+    const headings = request.onlySections.headings.map((h) => `"${h}"`).join(", ");
     return [
-      `A first extraction of this CV missed items in the "${request.onlySection.heading}" section.`,
-      "Extract ONLY that section from the excerpt below: every entry and every bullet, copied exactly.",
+      `A first extraction of this CV missed items in these sections: ${headings}.`,
+      "Extract ONLY those sections from the excerpt below: every entry and every bullet, copied exactly.",
       "Leave every other field empty (null or an empty list).",
     ].join(" ");
   }
@@ -159,8 +160,9 @@ registerMockResponder(RESUME_PARSER_WORKFLOW, (payload) => parseCvHeuristically(
 /** The parse step for the CV pipeline, backed by the AI runner's provider chain. */
 export function createResumeParser(runner: AiRunner, userId?: string): CvParseFn {
   return async (request) => {
-    const untrusted: UntrustedBlock[] = request.onlySection
-      ? [{ kind: "cv", id: `cv-section-${request.onlySection.kind}`, text: request.onlySection.text }]
+    const retry = request.onlySections;
+    const untrusted: UntrustedBlock[] = retry
+      ? [{ kind: "cv", id: `cv-sections-${retry.kinds.join("-")}`, text: retry.text }]
       : [
           { kind: "cv", id: "cv-text", text: request.text },
           ...(request.links.length ? [{ kind: "cv" as const, id: "cv-links", text: linksBlock(request.links) }] : []),
@@ -172,12 +174,15 @@ export function createResumeParser(runner: AiRunner, userId?: string): CvParseFn
       system: RESUME_PARSER_SYSTEM,
       instructions: instructionsFor(request),
       untrusted,
-      pdf: request.onlySection ? undefined : request.pdf,
+      pdf: retry ? undefined : request.pdf,
       schema: parsedCvSchema,
       userId,
       cache: true,
       temperature: 0,
-      timeoutMs: 120_000,
+      // The first read gets time for the PDF; the re-read is a short excerpt and must not keep the user waiting.
+      timeoutMs: retry ? 45_000 : 90_000,
+      // A full CV as JSON is several thousand tokens; reasoning models also count their thinking here.
+      maxOutputTokens: 16_000,
       mockPayload: { text: request.text, links: request.links } satisfies MockPayload,
       noAiFallback: () => parseCvHeuristically({ text: request.text, links: request.links }),
     });

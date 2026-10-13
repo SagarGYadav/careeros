@@ -53,6 +53,8 @@ function groq(env: Env): AiProvider {
     supportsPdf: false,
     models,
     languageModel: (tier) => client(models[tier]),
+    // gpt-oss models think before answering; "low" keeps extraction fast and inside the output limit.
+    providerOptions: () => ({ groq: { reasoningEffort: "low" } }),
   };
 }
 
@@ -74,7 +76,9 @@ function openrouter(env: Env): AiProvider {
     supportsPdf: false,
     models: { fast: primary, balanced: primary, strong: primary },
     languageModel: () => client(primary),
-    providerOptions: () => (fallbacks.length ? { openrouter: { models: fallbacks } } : undefined),
+    providerOptions: () => ({
+      openrouter: { reasoning: { effort: "low" }, ...(fallbacks.length && { models: fallbacks }) },
+    }),
   };
 }
 

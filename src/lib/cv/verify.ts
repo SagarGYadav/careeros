@@ -9,7 +9,7 @@ import type { ExtractedCv } from "./extract-text";
 import { canonicalUrl, classifyUrl, findEmails, findPhones, findUrls, normalizeUrl, samePhone } from "./regex";
 import type { CvDraft, EvidenceItem, ParsedCv } from "./schema";
 import type { CvSection, SectionKind } from "./sections";
-import { bestMatchScore, hasMetric, normalizeForMatch } from "./text";
+import { bestMatchScore, hasMetric, normalizeForMatch, wordCount } from "./text";
 
 export const GROUNDING_THRESHOLD = 0.9;
 
@@ -20,6 +20,7 @@ export type FlagIssue =
   | "date_unparsed"
   | "date_order"
   | "section_incomplete"
+  | "lines_not_extracted"
   | "empty_field";
 
 /** A field the review screen highlights. `path` is a dot path into the draft, e.g. "experience.0.bullets.2". */
@@ -40,7 +41,8 @@ export type VerificationReport = {
   overrides: { field: string; aiValue: string | null; value: string; source: "text" | "link" }[];
   completeness: {
     sections: SectionCheck[];
-    secondPass: { requested: SectionKind[]; improved: SectionKind[] };
+    /** `failed`: the re-read didn't answer in time, so the first answer was kept. */
+    secondPass: { requested: SectionKind[]; improved: SectionKind[]; failed?: boolean };
   };
   flags: VerificationFlag[];
 };
@@ -55,7 +57,7 @@ export type VerifyContext = {
   /** The deterministic parse of the same text: the reference for completeness. */
   reference: ParsedCv;
   now: Date;
-  secondPass?: { requested: SectionKind[]; improved: SectionKind[] };
+  secondPass?: { requested: SectionKind[]; improved: SectionKind[]; failed?: boolean };
 };
 
 export type VerifiedCv = {
@@ -136,6 +138,34 @@ export function computeExperienceTotals(experience: CvDraft["experience"], now: 
     gaps: totals.gaps,
     overlaps: totals.overlaps,
   };
+}
+
+/** A reference line this long is a real bullet; shorter lines are often sub-headings or taglines. */
+const SUBSTANTIVE_WORDS = 8;
+/** Below this share of real bullet lines found in the AI's answer, the section is re-read. */
+const COVERAGE_TARGET = 0.8;
+
+/**
+ * Bullet coverage for experience or projects: how many of the substantive bullet lines found in the text appear
+ * in the AI's answer. Coverage, not counts: an AI that joins a wrapped line or splits a long one is still complete.
+ */
+function bulletCoverage(parsed: ParsedCv, reference: ParsedCv, kind: "experience" | "projects") {
+  const entries = (p: ParsedCv) => (kind === "experience" ? p.experience : p.projects);
+  const answer = entries(parsed).flatMap((e) => [
+    ...e.bullets.map((b) => normalizeForMatch(b.text)),
+    ...("description" in e && e.description ? [normalizeForMatch(e.description)] : []),
+  ]);
+  const lines = entries(reference)
+    .flatMap((e) => e.bullets.map((b) => b.text))
+    .filter((text) => wordCount(text) >= SUBSTANTIVE_WORDS)
+    .map(normalizeForMatch);
+  const covered = lines.filter((line) =>
+    answer.some(
+      (a) =>
+        a === line || bestMatchScore(a, line) >= GROUNDING_THRESHOLD || bestMatchScore(line, a) >= GROUNDING_THRESHOLD,
+    ),
+  );
+  return { total: lines.length, covered: covered.length };
 }
 
 export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
@@ -458,7 +488,8 @@ export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
 
   const draft: CvDraft = { ...draftWithoutTotals, computed: computeExperienceTotals(experience, now) };
 
-  // ---- Completeness: every detected section has content, and counts are not below the text-based parse.
+  // ---- Completeness: every detected section has content, no fewer entries than the text-based parse, and the
+  // real bullet lines of experience and projects appear in the answer.
   const sectionChecks: SectionCheck[] = [];
   const incomplete = new Set<SecondPassSection>();
   for (const section of context.sections) {
@@ -466,9 +497,21 @@ export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
     if (!got || sectionChecks.some((c) => c.kind === section.kind)) continue;
     const want = countSection(context.reference, section.kind)!;
     const entriesShort = got.entries < want.entries;
-    const bulletsShort = want.bullets > 0 && got.bullets < Math.ceil(want.bullets * 0.9);
+    const coverage =
+      section.kind === "experience" || section.kind === "projects"
+        ? bulletCoverage(parsed, context.reference, section.kind)
+        : null;
+    const bulletsShort = Boolean(coverage?.total) && coverage!.covered < Math.ceil(coverage!.total * COVERAGE_TARGET);
     const empty = got.entries === 0;
     const complete = !empty && !entriesShort && !bulletsShort;
+    const missingLines = coverage ? coverage.total - coverage.covered : 0;
+    if (complete && missingLines > 0) {
+      flags.push({
+        path: section.kind,
+        issue: "lines_not_extracted",
+        message: `${missingLines} line${missingLines > 1 ? "s" : ""} under "${section.heading}" ${missingLines > 1 ? "aren't" : "isn't"} in the extracted bullets. Check the original and add ${missingLines > 1 ? "them" : "it"} if needed.`,
+      });
+    }
     sectionChecks.push({
       kind: section.kind,
       heading: section.heading,
@@ -482,7 +525,9 @@ export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
         issue: "section_incomplete",
         message: empty
           ? `The "${section.heading}" section wasn't extracted.`
-          : `Fewer items than the CV shows (${got.entries + got.bullets} of ${want.entries + want.bullets}).`,
+          : entriesShort
+            ? `Fewer entries than the CV shows (${got.entries} of ${want.entries}).`
+            : `Some bullet lines weren't extracted (${coverage!.covered} of ${coverage!.total} found).`,
       });
       if ((SECOND_PASS_SECTIONS as readonly string[]).includes(section.kind)) {
         incomplete.add(section.kind as SecondPassSection);

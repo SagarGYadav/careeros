@@ -32,6 +32,8 @@ export type StructuredRequest<T> = {
   cache?: boolean;
   temperature?: number;
   timeoutMs?: number;
+  /** Upper bound on generated tokens; reasoning models count their thinking towards it. */
+  maxOutputTokens?: number;
   /** What the mock provider's responder for this workflow receives. Must be JSON-serialisable. */
   mockPayload?: unknown;
   /** No-AI mode (SPEC §8.1): used when every AI provider is unavailable. */
@@ -150,6 +152,7 @@ export function createAiRunner(deps: AiRunnerDeps) {
       // The provider chain does retries and failover itself.
       maxRetries: 0,
       temperature: request.temperature,
+      maxOutputTokens: request.maxOutputTokens,
       providerOptions: {
         ...(provider.providerOptions?.() ?? {}),
         mock: { workflow: request.workflow, payload: (request.mockPayload ?? null) as never },

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { classifyAiError } from "@/lib/ai/errors";
 import {
   AllProvidersUnavailableError,
   checkAvailability,
@@ -146,6 +147,30 @@ describe("runWithFailover", () => {
     });
     expect(run.result).toBe("main");
     expect(calls).toBe(2);
+  });
+
+  it("moves straight to the backup when the main provider is overloaded or timed out, and rests it", async () => {
+    const store = new MemoryProviderStore();
+    const called: string[] = [];
+    const overloaded = classifyHttpFailure(503, { message: "high demand" });
+    const run = await runWithFailover({
+      service: "ai",
+      providers: [provider("main"), provider("backup")],
+      store,
+      now: () => NOW,
+      classify: (error) => (error as { failure: ClassifiedFailure }).failure,
+      call: async (p) => {
+        called.push(p.name);
+        if (p.name === "main") throw Object.assign(new Error("503"), { failure: overloaded });
+        return p.name;
+      },
+    });
+    expect(run.result).toBe("backup");
+    expect(called).toEqual(["main", "backup"]);
+    expect((await store.getHealth("ai", "main")).cooldownUntil).toEqual(new Date(NOW.getTime() + 60_000));
+
+    const timeout = Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    expect(classifyAiError(timeout)).toMatchObject({ kind: "transient", retry: false });
   });
 
   it("falls back on a rate limit and records why", async () => {

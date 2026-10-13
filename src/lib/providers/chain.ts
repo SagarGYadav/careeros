@@ -114,6 +114,10 @@ export function healthAfterFailure(health: HealthState, failure: ClassifiedFailu
       next.circuitOpenUntil = at(AUTH_FAILURE_PAUSE_MS);
       break;
     default:
+      // An overloaded provider gets a short rest so the next request goes straight to a backup.
+      if (failure.kind === "transient" && failure.retryAfterMs) {
+        next.cooldownUntil = at(Math.min(MAX_COOLDOWN_MS, failure.retryAfterMs));
+      }
       if (failures >= CIRCUIT_FAILURE_THRESHOLD) next.circuitOpenUntil = at(CIRCUIT_OPEN_MS);
   }
   return next;
@@ -171,7 +175,8 @@ type RunOptions<P extends ProviderInfo, R> = {
 /**
  * Tries providers in order until one succeeds (SPEC §7.3):
  * 1. skip providers that are unconfigured, disabled, cooling down, exhausted, paused, or at 90% of a limit;
- * 2. a transient error is retried once, other failures move straight to the next provider;
+ * 2. a transient error is retried once (not a timeout or an "overloaded" answer), other failures move straight
+ *    to the next provider;
  * 3. if every provider was skipped only for being near a limit, a second pass uses the reserved last 10%.
  */
 export async function runWithFailover<P extends ProviderInfo, R>(
@@ -212,7 +217,7 @@ export async function runWithFailover<P extends ProviderInfo, R>(
         const health = await store.getHealth(service, provider.name);
         await store.saveHealth(service, provider.name, healthAfterFailure(health, failure, now()));
         await options.onFailure?.(provider, failure);
-        if (failure.kind === "transient" && attempt === 1) continue;
+        if (failure.kind === "transient" && failure.retry !== false && attempt === 1) continue;
         attempts.push({ provider: provider.name, outcome: "failed", reason: failure.kind });
         noteUnusable(provider, failure.kind);
         return null;

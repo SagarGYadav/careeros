@@ -33,6 +33,8 @@ export function classifyHttpFailure(
     return { kind: "rate_limited", retryAfterMs, message };
   }
   if (status === 401 || status === 403) return { kind: "auth", message };
+  // 503 = "overloaded, try later": move to the next provider now and rest this one briefly.
+  if (status === 503) return { kind: "transient", retryAfterMs: retryAfterMs ?? 60_000, retry: false, message };
   if (status === 408 || status >= 500) return { kind: "transient", retryAfterMs, message };
   return { kind: "rejected", message };
 }

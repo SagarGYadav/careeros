@@ -16,8 +16,8 @@ export type CvParseRequest = {
   pdf?: { data: Uint8Array; filename: string };
   /** Headings found in the text, as a hint for the parser. */
   sectionHeadings: string[];
-  /** Set for a targeted second pass: extract only this section, from this excerpt. */
-  onlySection?: { kind: SecondPassSection; heading: string; text: string };
+  /** Set for a targeted second pass: extract only these sections, from these excerpts. */
+  onlySections?: { kinds: SecondPassSection[]; headings: string[]; text: string };
 };
 
 export type CvParseResult = {
@@ -94,30 +94,44 @@ export async function analyseCv(
   let parsed = first.parsed;
   let verified = verifyCv(parsed, { extracted, sections, reference, now: deps.now });
 
-  // A second pass only helps when an AI answered; the deterministic parser would return the same thing.
+  // A second pass only helps when an AI answered; the deterministic parser would return the same thing. All
+  // incomplete sections go in one request, and if it fails the first answer stands (with its flags): the
+  // re-read improves a draft, it never blocks one.
   if (first.mode !== "no_ai" && verified.incompleteSections.length) {
     deps.onStage?.("second_pass");
-    const { found } = groundingIndex(extracted.text);
-    const requested: SectionKind[] = [];
+    const kinds = verified.incompleteSections;
+    const requested: SectionKind[] = [...kinds];
     const improved: SectionKind[] = [];
-    for (const kind of verified.incompleteSections) {
-      const sectionText = sections
-        .filter((s) => s.kind === kind)
-        .map((s) => [s.heading, ...s.lines].join("\n"))
-        .join("\n\n");
-      requested.push(kind);
+    let failed = false;
+    try {
+      const chosen = sections.filter((s) => (kinds as SectionKind[]).includes(s.kind));
       const retry = await deps.parse({
         text: extracted.text,
         links: extracted.links,
         sectionHeadings,
-        onlySection: { kind, heading: sections.find((s) => s.kind === kind)?.heading ?? kind, text: sectionText },
+        onlySections: {
+          kinds,
+          headings: chosen.map((s) => s.heading),
+          text: chosen.map((s) => [s.heading, ...s.lines].join("\n")).join("\n\n"),
+        },
       });
-      if (groundedCount(retry.parsed, kind, found) > groundedCount(parsed, kind, found)) {
-        parsed = replaceSection(parsed, retry.parsed, kind);
-        improved.push(kind);
+      const { found } = groundingIndex(extracted.text);
+      for (const kind of kinds) {
+        if (groundedCount(retry.parsed, kind, found) > groundedCount(parsed, kind, found)) {
+          parsed = replaceSection(parsed, retry.parsed, kind);
+          improved.push(kind);
+        }
       }
+    } catch {
+      failed = true;
     }
-    verified = verifyCv(parsed, { extracted, sections, reference, now: deps.now, secondPass: { requested, improved } });
+    verified = verifyCv(parsed, {
+      extracted,
+      sections,
+      reference,
+      now: deps.now,
+      secondPass: { requested, improved, ...(failed && { failed: true }) },
+    });
   }
 
   const parse = {

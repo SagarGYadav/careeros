@@ -47,9 +47,22 @@ export async function POST(request: Request) {
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const encoder = new TextEncoder();
+  // If the browser leaves the page, the stream is cancelled but the upload carries on and is saved for review;
+  // progress events are then simply dropped.
+  let open = true;
   const stream = new ReadableStream<Uint8Array>({
+    cancel() {
+      open = false;
+    },
     async start(controller) {
-      const send = (event: CvUploadEvent) => controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      const send = (event: CvUploadEvent) => {
+        if (!open) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          open = false;
+        }
+      };
       try {
         const result = await processCvUpload(
           user.id,
@@ -60,7 +73,7 @@ export async function POST(request: Request) {
       } catch (error) {
         send(toErrorResult(error));
       } finally {
-        controller.close();
+        if (open) controller.close();
       }
     },
   });

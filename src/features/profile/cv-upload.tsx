@@ -100,7 +100,14 @@ export function CvUpload() {
   if (busy || (stage && error)) {
     return (
       <div className="space-y-4 rounded-xl border p-6" aria-busy={busy}>
-        <h2 className="text-sm font-medium">Reading your CV</h2>
+        <div className="space-y-0.5">
+          <h2 className="text-sm font-medium">Reading your CV</h2>
+          {!error && (
+            <p className="text-xs text-muted-foreground">
+              Usually under a minute. You can leave this page: the CV will be waiting in Career profile to review.
+            </p>
+          )}
+        </div>
         <ProgressSteps steps={stepsFor(stage === "uploading" ? null : stage, Boolean(error), retried)} />
         {error && (
           <div className="space-y-3">

@@ -58,7 +58,13 @@ export const HEALTHY: HealthState = {
 export type FailureKind =
   "rate_limited" | "quota_exhausted" | "auth" | "transient" | "rejected" | "invalid_output" | "bug";
 
-export type ClassifiedFailure = { kind: FailureKind; retryAfterMs?: number; message: string };
+export type ClassifiedFailure = {
+  kind: FailureKind;
+  retryAfterMs?: number;
+  message: string;
+  /** False when trying the same provider again can't help (it timed out, or said it is overloaded). */
+  retry?: boolean;
+};
 
 /** Persistence for usage counters and health. Prisma in the app, in-memory in tests. */
 export interface ProviderStateStore {

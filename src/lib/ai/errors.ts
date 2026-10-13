@@ -29,6 +29,10 @@ export function classifyAiError(error: unknown): ClassifiedFailure {
     return { kind: "transient", message };
   }
   if (LoadAPIKeyError.isInstance(error)) return { kind: "auth", message };
-  if (isNetworkOrTimeoutError(error)) return { kind: "transient", message };
+  // A request that used its whole time budget is not retried on the same provider: the backup gets the time.
+  if (isNetworkOrTimeoutError(error)) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return { kind: "transient", message, ...(timedOut && { retry: false }) };
+  }
   return { kind: "bug", message };
 }

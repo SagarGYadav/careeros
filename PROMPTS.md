@@ -174,3 +174,4 @@ Reference files and line numbers. Keep it under 300 words.
 | 1b | | | |
 | 1c | | | |
 | 1d | | | |
+| 2a–2e | local | several | Phase 2: CV upload, extraction, review, profile; §9.4 met with Gemini, Flash-Lite and Groq |

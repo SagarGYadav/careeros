@@ -27,7 +27,8 @@
     "db:seed": "tsx --conditions=react-server prisma/seed/index.ts",
     "db:seed:test": "node scripts/with-test-db.mjs tsx --conditions=react-server prisma/seed/index.ts",
     "db:migrate:create": "prisma migrate dev --create-only",
-    "fixtures:cv": "tsx scripts/make-fixtures.ts"
+    "fixtures:cv": "tsx scripts/make-fixtures.ts",
+    "eval:resume": "tsx --conditions=react-server scripts/eval-resume.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.93",

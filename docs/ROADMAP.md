@@ -55,7 +55,7 @@ session (local or cloud) can continue.
       date maths), evidence catalog
 - [x] 2d Review and profile: side-by-side review (pdf.js), flags and source quotes, confirm → profile + Resume v1;
       profile pages, preferences (locations, work modes, CTC, notice period, dealbreakers), Memory
-- [ ] 2e Evals: `npm run eval:resume` on all six fixtures with real Gemini; fix until the §9.4 targets are met
+- [x] 2e Evals: `npm run eval:resume` on all six fixtures with real Gemini; fix until the §9.4 targets are met
 - **Accept:** e2e with mock AI on every fixture; §9.4 targets met with real Gemini (numbers in Decisions).
 
 ### Phase 3 — Suggested roles, job search and relevance ranking · L · SPEC §7.2, §10
@@ -124,6 +124,15 @@ Each Part 2 phase is split into steps when it starts.
 - Design system: tokens, brand, page header, data table (sort/filter/columns/pagination), empty/error states, progress steps, trust badges, confidence labels, toasts with undo, Indian number/LPA formatters. Gallery at `/dev/design` (development only).
 - Tests: 28 unit, 5 integration (Neon `test` branch: migrations, pgvector, cascade deletes, real auth handler), 8 e2e (Playwright on a production build against the test DB, axe WCAG 2.2 AA checks in both themes). CI workflow in `.github/workflows/ci.yml`.
 
+**Phase 2 (CV upload and precise extraction)**
+- AI layer: provider chain Gemini → Groq → OpenRouter (free models) with quotas, switch at 90%, cooldowns, circuit breaker, immediate failover on overload/timeouts, usage and request logs without content; mock provider and no-AI mode; Settings → Services shows the chain, lets you reorder, disable and test providers; banner and badge when a backup or the mock answers.
+- CV upload (PDF/DOCX ≤ 5 MB, type checked from the bytes) with step-by-step progress; leaving the page doesn't stop it.
+- Extraction: page text with table cells kept apart, PDF link annotations ("LinkedIn" → URL), regex e-mail/phone/links, section detection, ResumeParser (Gemini reads the PDF plus the text; prompt v2 with a worked example), deterministic parser as mock and no-AI fallback.
+- Verification in code: grounding of every string (fuzzy ≥ 0.9), e-mail/phone/links from the file win over the AI, bullet-coverage completeness with one targeted re-read, dates normalised and durations/total experience/gaps/overlaps computed; CV evidence catalog (E-ids).
+- Review screen: original PDF (pdf.js) or text side by side with every extracted field, flags, source highlighting on focus; confirm builds the profile and makes the CV the default version.
+- Career profile: overview, details (incl. other CV sections), experience, projects, education and certifications, skills (suggested levels with reasons, confirm or change, add/remove), preferences (locations, work modes, CTC, notice, dealbreakers), memory (career facts).
+- `npm run eval:resume` measures extraction on the six fictional CVs with a real provider (`--provider=`, `--only=`).
+
 ## Known gaps
 
 - Phase 1: no email verification or password reset (single-user app; add before opening sign-ups to others).
@@ -132,6 +141,9 @@ Each Part 2 phase is split into steps when it starts.
 - Phase 2: re-uploading a CV replaces the profile on confirm; the added/changed/removed merge diff (SPEC §9.1 step 6) is not built yet.
 - Phase 2: proficiency is the code rule only; the optional AI ±1 adjustment (SPEC §9.3) is not built. Skill years refresh on CV confirm, not on later experience edits.
 - Phase 2: scanned PDFs (no text layer) are rejected with a clear message; there is no OCR.
+- Phase 2: the Gemini Flash measurement with prompt v2 covers 5 of 6 CVs (all 100%); the sixth (arjun-linked-text) hit the daily free quota and still needs a v2 run (`npm run eval:resume -- --only=arjun-linked-text`). With prompt v1 Flash scored 100% on all six.
+- Phase 2: the eval set is six fictional CVs written for this project; real CVs vary more. The first real CV read correctly after the coverage fix.
+- Phase 2: OpenRouter's free model is slow (~40–80 s per CV); it is the last backup. Free model lists change, so `OPENROUTER_FREE_MODELS` may need updating.
 
 ## Decisions
 _(date — decision — reason)_
@@ -170,3 +182,6 @@ _(date — decision — reason)_
 - 2026-10-13 — First real upload (Gemini) took minutes: Gemini answered 503 "high demand", the chain retried it and waited out a 120 s timeout, then Groq's gpt-oss stopped mid-JSON (default output limit). Fixes: 503 and timeouts fail over at once (503 also rests the provider for 60 s); ResumeParser asks for up to 16k output tokens with low reasoning effort on gpt-oss/OpenRouter; first read 90 s, re-read 45 s.
 - 2026-10-13 — Completeness now measures coverage, not counts: the re-read runs only when under 80% of the CV's substantive bullet lines (8+ words) appear in the AI's answer; smaller gaps become a review note. All incomplete sections are re-read in one request, and a failed re-read keeps the first answer. On the first real CV the old count rule asked for a needless re-read (short sub-heading lines counted as bullets).
 - 2026-10-13 — Leaving the upload page no longer fails the upload: the stream is cancelled, processing finishes, and the CV waits in Career profile for review.
+- 2026-10-13 — §9.4 measured with `npm run eval:resume` (six fictional CVs, real providers, no cache, prompt v2 unless noted). Gemini Flash (`gemini-flash-latest` = gemini-3.8-flash): 6/6 CVs at 100% on every metric with prompt v1; 5/6 at 100% with v2 (sixth not measured: daily quota). Gemini Flash-Lite: 6/6, 100%, ~6 s per CV. Groq `gpt-oss-120b`: 6/6, 100% (v1 scored bullets 92.1%, education 94.4%: it merged short project bullets into the description and kept the subject in the degree; prompt v2 rules 12–13 fixed both). Contact 36/36, roles 11/11, role fields 44/44, bullets 38/38, invented 0, skills recall and precision 63/63, education 18/18, certifications 4/4.
+- 2026-10-13 — Google's free quotas are per model and the newest Flash allows about 20 requests a day. Gemini is now two providers on one key: `gemini` (Flash, limit 18/day) and `gemini-lite` (Flash-Lite, own quota), so using up Flash no longer takes Google out of the chain. Default chain: gemini → gemini-lite → groq → openrouter. The eval waits for the chosen provider instead of scoring the deterministic fallback.
+- 2026-10-13 — ResumeParser prompt v2 adds two rules (project description vs bullets; degree vs field). Bumping the version keeps cached v1 answers from being reused.

@@ -30,10 +30,30 @@ function gemini(env: Env): AiProvider {
     name: "gemini",
     label: "Google Gemini",
     configured: Boolean(apiKey),
-    limits: { minute: 9, day: 200 },
+    // Free tier of the newest Flash model: about 20 requests a day (checked 2026-10-13; Google lowers these).
+    limits: { minute: 5, day: 18 },
     supportsPdf: true,
     models,
     languageModel: (tier) => google(models[tier]),
+  };
+}
+
+/**
+ * Gemini Flash-Lite as its own provider. Google's free quotas are per model, so when Flash's small daily quota is
+ * used up, Flash-Lite (same key, larger quota) still answers before the chain leaves Google.
+ */
+function geminiLite(env: Env): AiProvider {
+  const apiKey = env.GEMINI_API_KEY;
+  const model = env.GEMINI_LITE_MODEL || "gemini-flash-lite-latest";
+  const google = createGoogleGenerativeAI({ apiKey });
+  return {
+    name: "gemini-lite",
+    label: "Google Gemini Flash-Lite",
+    configured: Boolean(apiKey),
+    limits: { minute: 10, day: 200 },
+    supportsPdf: true,
+    models: { fast: model, balanced: model, strong: model },
+    languageModel: () => google(model),
   };
 }
 
@@ -96,7 +116,13 @@ function mock(): AiProvider {
   };
 }
 
-const FACTORIES: Record<string, (env: Env) => AiProvider> = { gemini, groq, openrouter, mock: () => mock() };
+const FACTORIES: Record<string, (env: Env) => AiProvider> = {
+  gemini,
+  "gemini-lite": geminiLite,
+  groq,
+  openrouter,
+  mock: () => mock(),
+};
 
 export const KNOWN_AI_PROVIDERS = Object.keys(FACTORIES);
 

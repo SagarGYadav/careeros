@@ -22,6 +22,21 @@ test("set up a signed-in user", async ({ page }) => {
 test.describe("signed in", () => {
   test.use({ storageState: AUTH_FILE });
 
+  // The acceptance flow must run without browser console errors (CLAUDE.md, end of phase).
+  let consoleErrors: string[] = [];
+  test.beforeEach(({ page }) => {
+    consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+  });
+  test.afterEach(() => {
+    // The upload test with a non-PDF file expects a failed request; the browser logs those as errors.
+    const unexpected = consoleErrors.filter((e) => !/Failed to load resource/.test(e));
+    expect(unexpected, "browser console errors").toEqual([]);
+  });
+
   test("an empty profile starts with the CV upload", async ({ page }) => {
     await page.goto("/overview");
     await page.getByRole("link", { name: "Career profile" }).click();

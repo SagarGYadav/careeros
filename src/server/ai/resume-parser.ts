@@ -12,7 +12,7 @@ import { parsedCvSchema, type ParsedCv } from "@/lib/cv/schema";
 
 export const RESUME_PARSER_WORKFLOW = "resume-parser";
 /** Bump when the prompt or schema changes, so cached answers from the old prompt are not reused. */
-export const RESUME_PARSER_PROMPT_VERSION = "1";
+export const RESUME_PARSER_PROMPT_VERSION = "2";
 
 // A short fictional example (few-shot) showing the exact-copy rules on a tiny CV.
 const EXAMPLE_CV = `Meera Joshi
@@ -120,6 +120,10 @@ anything else) go in otherSections with their heading. Drop nothing.
 jobSearch exactly as written.
 10. sourceQuote: copy the CV line or lines that name the role, project, degree or certification and its dates.
 11. In tables, cells are separated by tab characters.
+12. Projects: the one line that says what the project is goes in description; every other line about the project \
+is a separate bullet, however short ("Used by 6 schools."). A line listing technologies or a link is not a bullet.
+13. Education: degree is the degree name only ("B.E.", "B.Tech", "M.Sc."); the subject goes in field, also when the \
+CV writes them together ("B.E. (Computer Science)", "B.Tech in Information Technology").
 
 Example CV:
 ${EXAMPLE_CV}

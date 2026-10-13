@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -211,6 +212,30 @@ function RoleCard({ role }: { role: TargetRoleView }) {
           <p className="text-xs text-muted-foreground">
             Core skills not yet at level 3: {role.coverage.missing.join(", ")}
           </p>
+        )}
+        {role.market && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-xs">
+            <span>
+              <span className="font-medium tabular-nums">{role.market.openings}</span>{" "}
+              {role.market.openings === 1 ? "opening" : "openings"} found in 30 days
+            </span>
+            {role.market.averageRelevance !== null && (
+              <span>
+                average relevance <span className="font-medium tabular-nums">{role.market.averageRelevance}</span>
+              </span>
+            )}
+            {role.market.topMissingSkill && (
+              <span>
+                most asked-for skill you lack: <span className="font-medium">{role.market.topMissingSkill}</span>
+              </span>
+            )}
+            <TrustBadge kind="calc" />
+            {role.market.openings > 0 && (
+              <Link href={`/jobs?role=${role.id}`} className="ml-auto underline underline-offset-2">
+                See jobs<span className="sr-only"> for {role.title}</span>
+              </Link>
+            )}
+          </div>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">

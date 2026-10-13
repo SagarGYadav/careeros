@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProviderChainTable, type ProviderRow } from "@/features/services/provider-chain-table";
+import { getCurrentUser } from "@/server/auth/session";
+import { getSearchUsage } from "@/server/services/feed";
 import { SERVICES, getServiceSummary, type BuiltService } from "@/server/services/service-status";
 
 export const metadata: Metadata = { title: "Services" };
@@ -47,6 +50,9 @@ export default function ServicesPage() {
           <ServiceCard {...card} />
         </Suspense>
       ))}
+      <Suspense fallback={<Skeleton className="h-32 w-full rounded-xl" />}>
+        <SearchUsageCard />
+      </Suspense>
       <p className="text-xs text-muted-foreground">
         API keys are read from <code>.env</code> and never stored in the database. Order and on/off changes here apply
         to the whole app.
@@ -81,6 +87,52 @@ async function ServiceCard({ service, description, envVar }: (typeof CARDS)[numb
         <p className="text-xs text-muted-foreground">
           The chain comes from <code>{envVar}</code>.
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  adzuna: "Adzuna",
+  jooble: "Jooble",
+  serpapi: "SerpApi",
+  mock: "Mock",
+};
+
+/** Your own job-search use this month, next to the chain limits above (SPEC §8.5). */
+async function SearchUsageCard() {
+  // "This month" depends on the current time, so this card renders per request.
+  await connection();
+  const user = await getCurrentUser();
+  const usage = await getSearchUsage(user.id);
+  const providers = Object.entries(usage.requests).sort((a, b) => b[1] - a[1]);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">Your searches this month</CardTitle>
+        <CardDescription>Counted from your search runs since the 1st (UTC).</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {usage.runs === 0 ? (
+          <p className="text-sm text-muted-foreground">No searches yet this month.</p>
+        ) : (
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
+            <dt className="text-muted-foreground">Searches</dt>
+            <dd className="tabular-nums">
+              {usage.runs} ({usage.finishedRuns} finished)
+            </dd>
+            <dt className="text-muted-foreground">Requests</dt>
+            <dd className="tabular-nums">
+              {providers.length
+                ? providers.map(([name, count]) => `${PROVIDER_LABELS[name] ?? name} ${count}`).join(" · ")
+                : "None"}
+            </dd>
+            <dt className="text-muted-foreground">Postings found</dt>
+            <dd className="tabular-nums">
+              {usage.found} ({usage.newJobs} new)
+            </dd>
+          </dl>
+        )}
       </CardContent>
     </Card>
   );

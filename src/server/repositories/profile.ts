@@ -182,3 +182,8 @@ export async function savePersonalDetails(userId: string, personal: CvDraft["per
 export async function runBatch(statements: Prisma.PrismaPromise<unknown>[]) {
   await db.$transaction(statements);
 }
+
+/** When the user last opened the "For you" feed; jobs found after it get a "New" badge. */
+export async function setFeedSeenAt(userId: string, at: Date) {
+  await db.careerProfile.updateMany({ where: { userId }, data: { feedSeenAt: at } });
+}

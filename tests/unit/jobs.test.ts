@@ -11,7 +11,7 @@ import {
 } from "@/lib/jobs/normalize";
 import { buildSearchPlan } from "@/lib/jobs/plan";
 import { prepareJob } from "@/lib/jobs/prepare";
-import { scoreJob, type RankingJob, type RankingProfile } from "@/lib/jobs/relevance";
+import { DISMISSED_COMPANY_PENALTY, scoreJob, type RankingJob, type RankingProfile } from "@/lib/jobs/relevance";
 import { parseSalary } from "@/lib/jobs/salary";
 
 const NOW = new Date("2026-10-13T10:00:00Z");
@@ -250,6 +250,28 @@ describe("relevance (quick match)", () => {
       "Office 5 days a week (you accept 3).",
       "Wants joiners within 15 days; your notice is 60.",
     ]);
+  });
+
+  it("learns from dismiss reasons: tighter seniority margins and a penalty for dismissed companies", () => {
+    const senior = job({ expMinYears: 8, expMaxYears: 12 });
+    // 8 years asked vs 5.3 held: inside the default margin of 4, outside a learned margin of 2.
+    expect(scoreJob(senior, profile, catalogue).notFit).toEqual([]);
+    expect(scoreJob(senior, { ...profile, aboveYearsMargin: 2 }, catalogue).notFit).toEqual([
+      "Asks 8+ years; you have 5.3.",
+    ]);
+    const junior = job({ expMinYears: 0, expMaxYears: 2 });
+    expect(scoreJob(junior, profile, catalogue).notFit).toEqual([]);
+    expect(scoreJob(junior, { ...profile, belowYearsMargin: 3 }, catalogue).notFit).toEqual([
+      "For up to 2 years of experience.",
+    ]);
+
+    const plain = scoreJob(job({}), profile, catalogue);
+    const dismissed = scoreJob(job({ companyDismissed: true }), profile, catalogue);
+    expect(plain.adjustments).toEqual([]);
+    expect(dismissed.adjustments).toEqual([
+      { points: -DISMISSED_COMPANY_PENALTY, reason: "You dismissed jobs from this company before." },
+    ]);
+    expect(dismissed.score).toBe(plain.score - DISMISSED_COMPANY_PENALTY);
   });
 });
 

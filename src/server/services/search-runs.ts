@@ -13,6 +13,8 @@ import { embeddings, loadEmbeddingProviders } from "@/server/embeddings/runner";
 import { jobSearch } from "@/server/jobsearch/runner";
 import {
   countJobs,
+  dismissalStats,
+  jobsForRoleStats,
   createJobs,
   findDedupeCandidates,
   listJobsForRanking,
@@ -33,7 +35,7 @@ import {
 } from "@/server/repositories/search-runs";
 import { formatSalaryRange } from "@/lib/format";
 import { listSkillCatalogue, listSkillImplicationIds, listUserSkills } from "@/server/repositories/skills";
-import { listTargetRoles } from "@/server/repositories/target-roles";
+import { listTargetRoles, saveRoleMarketStats } from "@/server/repositories/target-roles";
 import {
   getProfileEmbeddingInfo,
   jobSimilarities,
@@ -169,7 +171,8 @@ const keyOf = (job: PreparedJob): DedupeKey => ({
   postedAt: job.postedAt,
 });
 
-const linksOf = (value: unknown): ApplyLink[] =>
+/** Apply links stored on a job (JSON), validated. */
+export const linksOf = (value: unknown): ApplyLink[] =>
   z
     .array(z.object({ site: z.string(), url: z.string() }))
     .catch([])
@@ -321,13 +324,29 @@ const NO_CONDITIONS: Conditions = {
   wfoDaysPerWeek: null,
 };
 
-async function rankingContext(userId: string): Promise<{ profile: RankingProfile; catalogue: string[] }> {
-  const [career, userSkills, catalogue, implications, roles] = await Promise.all([
+type RankingContext = { profile: RankingProfile; catalogue: string[]; dismissedCompanyIds: Set<string> };
+
+/**
+ * Dismiss reasons tune ranking (SPEC §10.6): two "too senior" dismissals tighten the seniority filter (four: tighter
+ * still), two "too junior" ones do the same below, and companies dismissed for the reason "company" rank lower.
+ */
+function learnedMargins(reasons: Record<string, number>) {
+  const senior = reasons.too_senior ?? 0;
+  const junior = reasons.too_junior ?? 0;
+  return {
+    aboveYearsMargin: senior >= 4 ? 1 : senior >= 2 ? 2 : 4,
+    belowYearsMargin: junior >= 2 ? 3 : 5,
+  };
+}
+
+async function rankingContext(userId: string): Promise<RankingContext> {
+  const [career, userSkills, catalogue, implications, roles, dismissals] = await Promise.all([
     getCareerProfile(userId),
     listUserSkills(userId),
     listSkillCatalogue(userId),
     listSkillImplicationIds(userId),
     listTargetRoles(userId),
+    dismissalStats(userId),
   ]);
   // A skill counts as held when the user holds one that implies it (Next.js → React), at that level.
   const levels = new Map(userSkills.map((s) => [s.skillId, s.proficiency]));
@@ -343,7 +362,9 @@ async function rankingContext(userId: string): Promise<{ profile: RankingProfile
   ];
   return {
     catalogue: catalogue.map((s) => s.name),
+    dismissedCompanyIds: new Set(dismissals.companyIds),
     profile: {
+      ...learnedMargins(dismissals.reasons),
       years: career?.yearsExperience ?? null,
       skills: [...levels].flatMap(([id, proficiency]) =>
         names.has(id) ? [{ name: names.get(id)!, proficiency }] : [],
@@ -357,6 +378,67 @@ async function rankingContext(userId: string): Promise<{ profile: RankingProfile
       dealbreakers: dealbreakersSchema.parse(career?.dealbreakers ?? {}),
     },
   };
+}
+
+/** Scores one page of jobs and saves the scores. Returns how many were scored. */
+async function scorePage(
+  userId: string,
+  ranking: RankingContext,
+  page: Awaited<ReturnType<typeof listJobsForRanking>>,
+) {
+  const similarity = await jobSimilarities(
+    userId,
+    page.map((j) => j.id),
+  );
+  const scores = page.map((job) => {
+    const relevance = scoreJob(
+      {
+        title: job.title,
+        description: job.descriptionRaw,
+        city: job.locationCity,
+        workMode: job.workMode,
+        salaryMinAnnual: job.salaryMinAnnual,
+        salaryMaxAnnual: job.salaryMaxAnnual,
+        salaryDisclosed: job.salaryDisclosed,
+        salaryCurrency: job.salaryCurrency,
+        expMinYears: job.expMinYears,
+        expMaxYears: job.expMaxYears,
+        seniority: job.seniority,
+        conditions: { ...NO_CONDITIONS, ...((job.conditions as Partial<Conditions> | null) ?? {}) },
+        semantic: similarity.get(job.id) ?? null,
+        companyDismissed: Boolean(job.companyId && ranking.dismissedCompanyIds.has(job.companyId)),
+      },
+      ranking.profile,
+      ranking.catalogue,
+    );
+    return {
+      id: job.id,
+      score: relevance.score,
+      parts: {
+        parts: relevance.parts,
+        adjustments: relevance.adjustments,
+        missingSkills: relevance.missingSkills,
+        jobSkills: relevance.jobSkills,
+      },
+      notFitReasons: relevance.notFit,
+    };
+  });
+  await saveScores(userId, scores);
+  return page.length;
+}
+
+/** Re-ranks every saved job now (after dismissals that change ranking or a profile change). */
+export async function rescoreAllJobs(userId: string, maxJobs = 2000) {
+  const ranking = await rankingContext(userId);
+  let after: string | null = null;
+  let scored = 0;
+  while (scored < maxJobs) {
+    const page = await listJobsForRanking(userId, after, RANK_PAGE);
+    if (!page.length) break;
+    scored += await scorePage(userId, ranking, page);
+    after = page.at(-1)!.id;
+  }
+  return scored;
 }
 
 /** The text the profile vector is made from: headline, summary, experience bullets and skills (no personal details). */
@@ -409,7 +491,7 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
   };
   const timeLeft = () => Date.now() - started < STEP_BUDGET_MS;
   const note = (message: string) => errors.push({ at: new Date().toISOString(), message });
-  let ranking: Awaited<ReturnType<typeof rankingContext>> | null = null;
+  let ranking: RankingContext | null = null;
 
   try {
     while (timeLeft() && state.stage !== "done") {
@@ -508,41 +590,11 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
         if (!state.rankTotal) state.rankTotal = await countJobs(userId);
         const page = await listJobsForRanking(userId, state.rankAfter, RANK_PAGE);
         if (!page.length) {
+          await refreshRoleMarketStats(userId);
           state.stage = "done";
           continue;
         }
-        const similarity = await jobSimilarities(
-          userId,
-          page.map((j) => j.id),
-        );
-        const scores = page.map((job) => {
-          const relevance = scoreJob(
-            {
-              title: job.title,
-              description: job.descriptionRaw,
-              city: job.locationCity,
-              workMode: job.workMode,
-              salaryMinAnnual: job.salaryMinAnnual,
-              salaryMaxAnnual: job.salaryMaxAnnual,
-              salaryDisclosed: job.salaryDisclosed,
-              salaryCurrency: job.salaryCurrency,
-              expMinYears: job.expMinYears,
-              expMaxYears: job.expMaxYears,
-              seniority: job.seniority,
-              conditions: { ...NO_CONDITIONS, ...((job.conditions as Partial<Conditions> | null) ?? {}) },
-              semantic: similarity.get(job.id) ?? null,
-            },
-            ranking!.profile,
-            ranking!.catalogue,
-          );
-          return {
-            id: job.id,
-            score: relevance.score,
-            parts: { parts: relevance.parts, missingSkills: relevance.missingSkills, jobSkills: relevance.jobSkills },
-            notFitReasons: relevance.notFit,
-          };
-        });
-        await saveScores(userId, scores);
+        await scorePage(userId, ranking, page);
         state.rankAfter = page.at(-1)!.id;
         state.ranked += page.length;
         continue;
@@ -606,4 +658,41 @@ export async function getSearchOverview(userId: string) {
       };
     }),
   };
+}
+
+const MARKET_WINDOW_DAYS = 30;
+
+/** How often a skill must be missing before it is shown as a role's top gap (one posting is noise). */
+const MIN_GAP_COUNT = 2;
+
+/**
+ * Market stats per target role (SPEC §10.1), refreshed after each search: openings posted in the last 30 days, their
+ * average relevance and the skill they most often ask for that the user lacks. All computed in code.
+ */
+export async function refreshRoleMarketStats(userId: string, now = new Date()) {
+  const [roles, jobs] = await Promise.all([
+    listTargetRoles(userId),
+    jobsForRoleStats(userId, new Date(now.getTime() - MARKET_WINDOW_DAYS * 86_400_000)),
+  ]);
+  const missingSchema = z.object({ missingSkills: z.array(z.string()) }).catch({ missingSkills: [] });
+  const rows = roles.map((role) => {
+    const found = jobs.filter((j) => j.targetRoleIds.includes(role.id));
+    const scores = found.flatMap((j) => (j.quickScore === null ? [] : [j.quickScore]));
+    const gaps = new Map<string, number>();
+    for (const job of found) {
+      for (const skill of missingSchema.parse(job.scoreParts).missingSkills)
+        gaps.set(skill, (gaps.get(skill) ?? 0) + 1);
+    }
+    const topGap = [...gaps].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    return {
+      id: role.id,
+      stats: {
+        openings: found.length,
+        averageRelevance: scores.length ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null,
+        topMissingSkill: topGap && topGap[1] >= MIN_GAP_COUNT ? topGap[0] : null,
+        computedAt: now.toISOString(),
+      },
+    };
+  });
+  await saveRoleMarketStats(userId, rows);
 }

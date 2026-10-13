@@ -3,11 +3,22 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MOCK_EMBEDDING_MODEL } from "@/lib/embeddings/providers";
+import type { FeedFilters } from "@/lib/jobs/feed";
 import { db } from "@/server/db";
 import { savePreferences } from "@/server/repositories/profile";
 import { listTargetRoles, updateTargetRole } from "@/server/repositories/target-roles";
 import { getProfileEmbeddingInfo } from "@/server/repositories/vectors";
 import { processCvUpload } from "@/server/services/cv-pipeline";
+import {
+  blockCompany,
+  dismissJobs,
+  getFeed,
+  getSearchUsage,
+  markFeedSeen,
+  restoreJobs,
+  setJobsSaved,
+} from "@/server/services/feed";
+import { getOnboardingChecklist } from "@/server/services/onboarding";
 import { confirmResume } from "@/server/services/profile";
 import { advanceSearchRun, getSearchOverview, startSearchRun, type RunProgress } from "@/server/services/search-runs";
 import { addCustomRole, suggestTargetRoles } from "@/server/services/target-roles";
@@ -97,6 +108,72 @@ describe("search runs", () => {
     const again = await runToEnd(await startSearchRun(userId));
     expect(again).toMatchObject({ status: "done", newJobs: 0 });
     expect(await db.job.count({ where: { userId } })).toBe(before);
+  }, 240_000);
+
+  it("feeds the For you page: groups, filters, dismiss reasons that tune ranking, saving and blocking", async () => {
+    const feed = (filters: Partial<FeedFilters> = {}, page = 1) =>
+      getFeed(userId, { page, filters: { group: "for_you", ...filters } });
+
+    const first = await feed();
+    expect(first.hasJobs).toBe(true);
+    expect(first.cards.length).toBeGreaterThan(0);
+    const scores = first.cards.map((c) => c.score ?? -1);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
+    expect(first.cards.every((c) => c.notFitReasons.length === 0 && !c.staffing && !c.stale)).toBe(true);
+    expect(first.cards[0].reasons.length).toBeGreaterThan(0);
+    // Before the first visit nothing is "new".
+    expect(first.cards.some((c) => c.isNew)).toBe(false);
+    // The contract-to-hire agency posting sits in the hidden groups, counted.
+    const notFit = await feed({ group: "not_fit" });
+    expect(notFit.cards.some((c) => c.title === "React Developer - Contract to Hire")).toBe(true);
+    expect(first.counts.not_fit).toBe(notFit.total);
+
+    await markFeedSeen(userId, new Date("2000-01-01T00:00:00Z"));
+    expect((await feed()).cards.every((c) => c.isNew)).toBe(true);
+    await markFeedSeen(userId);
+    expect((await feed()).cards.some((c) => c.isNew)).toBe(false);
+
+    const city = first.cards[0].city!;
+    expect((await feed({ city })).cards.every((c) => c.city === city)).toBe(true);
+    expect((await feed({ workMode: "remote" })).cards.every((c) => c.workMode === "remote")).toBe(true);
+
+    // Dismissing for the reason "company" ranks that company's other jobs lower, with the reason shown.
+    const target =
+      first.cards.find((c) => c.companyId && first.cards.filter((o) => o.companyId === c.companyId).length > 1) ??
+      first.cards.find((c) => c.companyId)!;
+    const sibling = first.cards.find((c) => c.companyId === target.companyId && c.id !== target.id);
+    await dismissJobs(userId, [target.id], "company");
+    const afterDismiss = await feed();
+    expect(afterDismiss.cards.some((c) => c.id === target.id)).toBe(false);
+    expect(afterDismiss.counts.dismissed).toBe(1);
+    if (sibling) {
+      const lowered = afterDismiss.cards.find((c) => c.id === sibling.id)!;
+      expect(lowered.adjustments).toEqual([{ points: -15, reason: "You dismissed jobs from this company before." }]);
+      expect(lowered.score).toBeLessThan(sibling.score!);
+    }
+    await restoreJobs(userId, [target.id]);
+    expect((await feed()).counts.dismissed).toBe(0);
+
+    // Saving and blocking.
+    await setJobsSaved(userId, [first.cards[1].id], true);
+    expect((await feed({ group: "saved" })).cards.map((c) => c.id)).toEqual([first.cards[1].id]);
+    await blockCompany(userId, target.companyId!, true);
+    const blocked = await feed({ group: "blocked" });
+    expect(blocked.cards.length).toBeGreaterThan(0);
+    expect((await feed()).cards.some((c) => c.companyId === target.companyId)).toBe(false);
+    await blockCompany(userId, target.companyId!, false);
+
+    // Market stats per role, computed after the run.
+    const react = (await listTargetRoles(userId)).find((r) => r.selected)!;
+    expect(react.marketStats).toMatchObject({ openings: expect.any(Number), averageRelevance: expect.any(Number) });
+    expect((react.marketStats as { openings: number }).openings).toBeGreaterThan(0);
+    expect((await feed({ roleId: react.id })).total).toBeGreaterThan(0);
+
+    const usage = await getSearchUsage(userId);
+    expect(usage.runs).toBe(2);
+    expect(usage.requests.mock).toBeGreaterThan(0);
+    const checklist = await getOnboardingChecklist(userId);
+    expect(checklist.every((step) => step.done)).toBe(true);
   }, 240_000);
 
   it("refuses to start without a selected role", async () => {

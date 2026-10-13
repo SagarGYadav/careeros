@@ -1,5 +1,6 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
+import { FEED_GROUPS, type FeedFilters, type FeedGroup } from "@/lib/jobs/feed";
 import { db } from "@/server/db";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -96,6 +97,7 @@ export async function listJobsForRanking(userId: string, afterId: string | null,
     take,
     select: {
       id: true,
+      companyId: true,
       title: true,
       descriptionRaw: true,
       locationCity: true,
@@ -157,4 +159,160 @@ export async function topJobsOfRun(userId: string, runId: string, take = 10) {
       company: { select: { isStaffingAgency: true } },
     },
   });
+}
+
+/** Dismiss reasons so far (they tune ranking) and the companies dismissed for the reason "company". */
+export async function dismissalStats(userId: string) {
+  const [reasons, companies] = await Promise.all([
+    db.job.groupBy({
+      by: ["dismissReason"],
+      where: { userId, feedStatus: "dismissed", dismissReason: { not: null } },
+      _count: { _all: true },
+    }),
+    db.job.findMany({
+      where: { userId, feedStatus: "dismissed", dismissReason: "company", companyId: { not: null } },
+      select: { companyId: true },
+      distinct: ["companyId"],
+    }),
+  ]);
+  return {
+    reasons: Object.fromEntries(reasons.map((r) => [r.dismissReason!, r._count._all])) as Record<string, number>,
+    companyIds: companies.map((c) => c.companyId!),
+  };
+}
+
+/** Jobs posted (or, without a date, found) since `since`, for per-role market stats. */
+export async function jobsForRoleStats(userId: string, since: Date) {
+  return db.job.findMany({
+    where: {
+      userId,
+      isStale: false,
+      OR: [{ postedAt: { gte: since } }, { postedAt: null, discoveredAt: { gte: since } }],
+    },
+    select: { targetRoleIds: true, quickScore: true, scoreParts: true },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// "For you" feed (SPEC §10.6)
+
+const notDismissed: Prisma.JobWhereInput = { feedStatus: { not: "dismissed" } };
+const cleanCompany: Prisma.JobWhereInput = {
+  OR: [{ companyId: null }, { company: { isStaffingAgency: false, isBlocked: false } }],
+};
+
+/** Each group's condition. A job hidden for any reason stays out of "For you"; the hidden groups may overlap. */
+function groupWhere(group: FeedGroup): Prisma.JobWhereInput {
+  switch (group) {
+    case "for_you":
+      return { AND: [notDismissed, { notFitReasons: { isEmpty: true } }, { isStale: false }, cleanCompany] };
+    case "saved":
+      return { feedStatus: "saved" };
+    case "not_fit":
+      return { AND: [notDismissed, { NOT: { notFitReasons: { isEmpty: true } } }] };
+    case "stale":
+      return { AND: [notDismissed, { isStale: true }] };
+    case "agency":
+      return { AND: [notDismissed, { company: { isStaffingAgency: true } }] };
+    case "blocked":
+      return { AND: [notDismissed, { company: { isBlocked: true } }] };
+    case "dismissed":
+      return { feedStatus: "dismissed" };
+  }
+}
+
+function feedWhere(userId: string, filters: FeedFilters, now: Date): Prisma.JobWhereInput {
+  const and: Prisma.JobWhereInput[] = [groupWhere(filters.group)];
+  if (filters.roleId) and.push({ targetRoleIds: { has: filters.roleId } });
+  if (filters.city) and.push({ locationCity: filters.city });
+  if (filters.workMode) and.push({ workMode: filters.workMode });
+  if (filters.postedWithinDays) {
+    and.push({ postedAt: { gte: new Date(now.getTime() - filters.postedWithinDays * 86_400_000) } });
+  }
+  if (filters.provider) and.push({ provider: filters.provider });
+  if (filters.directOnly) and.push({ isDirectFromCompany: true });
+  if (filters.salaryMinAnnual) and.push({ salaryDisclosed: true, salaryMaxAnnual: { gte: filters.salaryMinAnnual } });
+  return { userId, AND: and };
+}
+
+export const FEED_PAGE_SIZE = 20;
+
+export async function listFeed(userId: string, filters: FeedFilters, page: number, now = new Date()) {
+  const where = feedWhere(userId, filters, now);
+  const [jobs, total] = await Promise.all([
+    db.job.findMany({
+      where,
+      orderBy: [
+        { quickScore: { sort: "desc", nulls: "last" } },
+        { postedAt: { sort: "desc", nulls: "last" } },
+        { id: "asc" },
+      ],
+      skip: (page - 1) * FEED_PAGE_SIZE,
+      take: FEED_PAGE_SIZE,
+      select: {
+        id: true,
+        title: true,
+        companyId: true,
+        companyName: true,
+        locationCity: true,
+        workMode: true,
+        salaryMinAnnual: true,
+        salaryMaxAnnual: true,
+        salaryDisclosed: true,
+        provider: true,
+        postedVia: true,
+        postedAt: true,
+        discoveredAt: true,
+        isDirectFromCompany: true,
+        isStale: true,
+        applyLinks: true,
+        quickScore: true,
+        scoreParts: true,
+        notFitReasons: true,
+        feedStatus: true,
+        dismissReason: true,
+        company: { select: { isStaffingAgency: true, isBlocked: true } },
+      },
+    }),
+    db.job.count({ where }),
+  ]);
+  return { jobs, total };
+}
+
+/** How many jobs each group holds (other filters ignored), for the group tabs. */
+export async function feedCounts(userId: string) {
+  const counts = await Promise.all(
+    FEED_GROUPS.map((group) => db.job.count({ where: { userId, ...groupWhere(group) } })),
+  );
+  return Object.fromEntries(FEED_GROUPS.map((group, i) => [group, counts[i]])) as Record<FeedGroup, number>;
+}
+
+/** Values for the filter menus: the cities and sources among the user's jobs. */
+export async function feedFacets(userId: string) {
+  const [cities, providers] = await Promise.all([
+    db.job.groupBy({ by: ["locationCity"], where: { userId, locationCity: { not: null } }, _count: { _all: true } }),
+    db.job.groupBy({ by: ["provider"], where: { userId }, _count: { _all: true } }),
+  ]);
+  return {
+    cities: cities.sort((a, b) => b._count._all - a._count._all).map((c) => c.locationCity!),
+    providers: providers.map((p) => p.provider).sort(),
+  };
+}
+
+export async function setFeedStatus(
+  userId: string,
+  ids: string[],
+  status: "new" | "saved" | "dismissed",
+  dismissReason: string | null = null,
+) {
+  const { count } = await db.job.updateMany({
+    where: { userId, id: { in: ids } },
+    data: { feedStatus: status, dismissReason: status === "dismissed" ? dismissReason : null },
+  });
+  return count;
+}
+
+export async function setCompanyBlocked(userId: string, companyId: string, blocked: boolean) {
+  const { count } = await db.company.updateMany({ where: { id: companyId, userId }, data: { isBlocked: blocked } });
+  return count === 1;
 }

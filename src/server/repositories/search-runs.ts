@@ -60,3 +60,11 @@ export async function saveSearchRun(
     },
   });
 }
+
+/** Runs started since `since`, for the search-usage summary in Settings. */
+export async function listRunsSince(userId: string, since: Date) {
+  return db.jobSearchRun.findMany({
+    where: { userId, createdAt: { gte: since } },
+    select: { status: true, requestsByProvider: true, resultCount: true, newCount: true },
+  });
+}

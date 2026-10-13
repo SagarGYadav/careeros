@@ -237,6 +237,8 @@ model CareerProfile {
   dealbreakers          Json?
   domains               String[]
   onboardingCompletedAt DateTime?
+  /// When the user last opened the "For you" feed; newer jobs get a "New" badge.
+  feedSeenAt            DateTime?
   /// CV profile vector for semantic matching (SPEC §10.5): summary + bullets + skills, bge-small-en-v1.5.
   embedding             Unsupported("vector(384)")?
   /// The model that made `embedding`; vectors are only compared with vectors of the same model.

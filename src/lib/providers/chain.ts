@@ -279,6 +279,8 @@ export type ProviderStatus = {
   until: Date | null;
   usage: { kind: PeriodKind; used: number; limit: number }[];
   lastSuccessAt: Date | null;
+  /** What the provider itself says is left this period (SerpApi reports it), when known. */
+  reportedRemaining: number | null;
 };
 
 /** Status of one provider for Settings → Services and the backup banner. */
@@ -311,5 +313,6 @@ export function providerStatus(
       limit: provider.limits[kind]!,
     })),
     lastSuccessAt: health.lastSuccessAt,
+    reportedRemaining: health.reportedRemaining,
   };
 }

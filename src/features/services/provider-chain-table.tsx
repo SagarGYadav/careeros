@@ -89,6 +89,11 @@ export function ProviderChainTable({
                       </div>
                     ))
                 )}
+                {row.reportedRemaining !== null && (
+                  <div className="text-xs text-muted-foreground">
+                    {row.reportedRemaining} left, as reported by the provider
+                  </div>
+                )}
               </TableCell>
               <TableCell>
                 <div className="flex justify-end gap-1">

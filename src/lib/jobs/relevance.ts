@@ -45,7 +45,16 @@ export type RankingProfile = {
   expectedSalaryMin: number | null;
   noticePeriodDays: number | null;
   dealbreakers: { bond: boolean; nightShift: boolean; contractToHire: boolean; maxWfoDaysPerWeek: number | null };
+  /**
+   * Learned from dismiss reasons (SPEC §10.6): how far a job's minimum years may exceed the user's before it is
+   * "Not a fit" (default 4; repeated "too senior" lowers it), and how far below (default 5; "too junior").
+   */
+  aboveYearsMargin?: number;
+  belowYearsMargin?: number;
 };
+
+/** Points taken off jobs from a company the user dismissed jobs from for the reason "company". */
+export const DISMISSED_COMPANY_PENALTY = 15;
 
 export type RankingJob = {
   title: string;
@@ -62,6 +71,8 @@ export type RankingJob = {
   conditions: Conditions;
   /** Cosine similarity with the profile, or null while the job is not embedded yet. */
   semantic: number | null;
+  /** The user dismissed this company's jobs before (reason "company"). */
+  companyDismissed?: boolean;
 };
 
 export type Relevance = {
@@ -70,6 +81,8 @@ export type Relevance = {
   notFit: string[];
   jobSkills: string[];
   missingSkills: string[];
+  /** Changes on top of the parts, with reasons (e.g. a dismissed company). */
+  adjustments: { points: number; reason: string }[];
 };
 
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
@@ -182,10 +195,10 @@ export function notFitReasons(job: RankingJob, profile: RankingProfile): string[
   const reasons: string[] = [];
   const y = profile.years;
   if (y !== null) {
-    if (job.expMinYears !== null && job.expMinYears >= y + 4)
+    if (job.expMinYears !== null && job.expMinYears >= y + (profile.aboveYearsMargin ?? 4))
       reasons.push(`Asks ${years(job.expMinYears)}+ years; you have ${years(y)}.`);
     else if (job.seniority === "lead" && y < 5) reasons.push("Lead-level role.");
-    if (job.expMaxYears !== null && job.expMaxYears <= y - 5)
+    if (job.expMaxYears !== null && job.expMaxYears <= y - (profile.belowYearsMargin ?? 5))
       reasons.push(`For up to ${years(job.expMaxYears)} years of experience.`);
     else if ((job.seniority === "intern" && y >= 1) || (job.seniority === "junior" && y >= 4))
       reasons.push("Junior or intern role.");
@@ -243,8 +256,12 @@ export function scoreJob(job: RankingJob, profile: RankingProfile, catalogue: st
       ...(neutral && { neutral }),
     };
   });
-  const score = Math.round(parts.reduce((sum, p) => sum + p.points, 0));
+  const adjustments = job.companyDismissed
+    ? [{ points: -DISMISSED_COMPANY_PENALTY, reason: "You dismissed jobs from this company before." }]
+    : [];
+  const score = Math.round(parts.reduce((sum, p) => sum + p.points, 0) + adjustments.reduce((s, a) => s + a.points, 0));
   return {
+    adjustments,
     score: Math.max(0, Math.min(100, score)),
     parts: parts.map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })),
     notFit: notFitReasons(job, profile),

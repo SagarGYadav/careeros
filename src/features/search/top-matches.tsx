@@ -34,7 +34,16 @@ const PART_LABELS: Record<ScorePart["key"], string> = {
 export const salaryLabel = (min: number | null, max: number | null, disclosed: boolean) =>
   disclosed ? formatSalaryRange(min, max) : null;
 
-function Relevance({ score, parts }: { score: number | null; parts: ScorePart[] }) {
+/** The score badge; opening it shows how the score adds up, part by part, with any adjustments. */
+export function Relevance({
+  score,
+  parts,
+  adjustments = [],
+}: {
+  score: number | null;
+  parts: ScorePart[];
+  adjustments?: { points: number; reason: string }[];
+}) {
   if (score === null) return <Badge variant="outline">Not ranked yet</Badge>;
   return (
     <details className="group text-right">
@@ -56,6 +65,13 @@ function Relevance({ score, parts }: { score: number | null; parts: ScorePart[] 
                 {part.value === null ? "—" : `${Math.round(part.points)} / ${Math.round(part.weight)}`}
               </span>
               <span>{part.reason}</span>
+            </li>
+          ))}
+          {adjustments.map((adjustment) => (
+            <li key={adjustment.reason} className="flex gap-2">
+              <span className="w-20 shrink-0 text-muted-foreground">Adjusted</span>
+              <span className="w-14 shrink-0 tabular-nums">{adjustment.points}</span>
+              <span>{adjustment.reason}</span>
             </li>
           ))}
         </ul>

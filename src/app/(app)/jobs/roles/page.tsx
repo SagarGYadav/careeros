@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { FileUp, Target } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
@@ -39,6 +40,8 @@ function RolesSkeleton() {
 }
 
 async function Roles() {
+  // The search overview compares run times with the current time, so this part renders per request.
+  await connection();
   const user = await getCurrentUser();
   const [{ roles, hasCv }, search] = await Promise.all([listTargetRolesView(user.id), getSearchOverview(user.id)]);
 

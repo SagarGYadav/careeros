@@ -25,6 +25,7 @@ import {
   listTargetRoles,
   replaceSuggestedRoles,
   setSelectedRoles,
+  type RoleMarketStats,
   type TargetRoleInput,
 } from "@/server/repositories/target-roles";
 
@@ -208,7 +209,19 @@ export type TargetRoleView = {
   keywords: string[];
   source: "ai" | "no_ai" | "user";
   selected: boolean;
+  /** From the latest search; null until the role has been searched. */
+  market: RoleMarketStats | null;
 };
+
+const marketStatsSchema = z
+  .object({
+    openings: z.number(),
+    averageRelevance: z.number().nullable(),
+    topMissingSkill: z.string().nullable(),
+    computedAt: z.string(),
+  })
+  .nullable()
+  .catch(null);
 
 /** Target roles for the page, with category, coverage and seniority computed now and evidence quotes attached. */
 export async function listTargetRolesView(userId: string): Promise<{ roles: TargetRoleView[]; hasCv: boolean }> {
@@ -239,6 +252,7 @@ export async function listTargetRolesView(userId: string): Promise<{ roles: Targ
         keywords: role.keywords,
         source: (role.source === "user" || role.source === "no_ai" ? role.source : "ai") as TargetRoleView["source"],
         selected: role.selected,
+        market: marketStatsSchema.parse(role.marketStats ?? null),
       };
     }),
   };

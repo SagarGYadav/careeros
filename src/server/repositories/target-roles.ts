@@ -65,3 +65,18 @@ export async function deleteTargetRole(userId: string, id: string) {
   const { count } = await db.targetRole.deleteMany({ where: { id, userId } });
   return count === 1;
 }
+
+/** Computed after each search (SPEC §10.1); never produced by AI. */
+export type RoleMarketStats = {
+  openings: number;
+  averageRelevance: number | null;
+  topMissingSkill: string | null;
+  computedAt: string;
+};
+
+export async function saveRoleMarketStats(userId: string, rows: { id: string; stats: RoleMarketStats }[]) {
+  if (!rows.length) return;
+  await db.$transaction(
+    rows.map((row) => db.targetRole.updateMany({ where: { id: row.id, userId }, data: { marketStats: row.stats } })),
+  );
+}

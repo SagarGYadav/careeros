@@ -66,7 +66,8 @@ export function createJobSearchRunner(deps: JobSearchRunnerDeps) {
 
   /**
    * A priority query for SerpApi alone, used for the top queries of each run. Returns null (without spending
-   * anything) when SerpApi isn't configured, is disabled, or is near its monthly allowance.
+   * anything) when SerpApi isn't configured, is disabled, or is near its monthly allowance. A failed request
+   * throws, so the run can note that a priority query was lost instead of skipping it silently.
    */
   async function searchPriority(params: JobSearchParams): Promise<ChainSearchResult | null> {
     const { providers, disabled } = await deps.getProviders();
@@ -89,7 +90,10 @@ export function createJobSearchRunner(deps: JobSearchRunnerDeps) {
       });
       return { ...run.result, provider: run.provider.name, fallbackFrom: null };
     } catch (error) {
-      if (error instanceof AllProvidersUnavailableError) return null;
+      // With one provider, "all unavailable" means SerpApi just failed (timeout, 5xx, 429); say so.
+      if (error instanceof AllProvidersUnavailableError) {
+        throw new AppError("SEARCH_FAILED", { message: "SerpApi didn't answer.", cause: error });
+      }
       throw error;
     }
   }

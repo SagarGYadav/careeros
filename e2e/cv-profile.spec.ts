@@ -219,4 +219,59 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "find-jobs");
   });
+
+  test("the For you feed ranks jobs, hides the rest with counts and learns from dismissals", async ({ page }) => {
+    // Dismissing for a reason that tunes ranking re-scores every job against the remote test database.
+    test.setTimeout(180_000);
+    await page.goto("/jobs/roles");
+    await expect(page.getByText(/openings? found in 30 days/).first()).toBeVisible();
+
+    await page.goto("/jobs");
+    await expect(page.getByRole("heading", { level: 1, name: "For you" })).toBeVisible();
+    const groups = page.getByRole("navigation", { name: "Job groups" });
+    await expect(groups.getByRole("link", { name: /^For you \d+$/ })).toHaveAttribute("aria-current", "page");
+    await expect(groups.getByRole("link", { name: "Dismissed 0" })).toBeVisible();
+
+    const selectBoxes = page.getByRole("checkbox", { name: /^Select .+ at / });
+    await expect(selectBoxes.first()).toBeVisible();
+    const firstName = ((await selectBoxes.first().getAttribute("aria-label")) ?? "").replace(/^Select /, "");
+    await page.getByRole("button", { name: `Dismiss ${firstName}` }).click();
+    await page.getByRole("menuitem", { name: "Too senior" }).click();
+    await expect(page.getByText("Dismissed 1 job (too senior).")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("checkbox", { name: `Select ${firstName}` })).toHaveCount(0);
+    await expect(groups.getByRole("link", { name: "Dismissed 1" })).toBeVisible();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByRole("checkbox", { name: `Select ${firstName}` })).toBeVisible({ timeout: 60_000 });
+    await expect(groups.getByRole("link", { name: "Dismissed 0" })).toBeVisible();
+
+    // Bulk save.
+    await selectBoxes.nth(0).check();
+    await selectBoxes.nth(1).check();
+    await expect(page.getByText("2 selected")).toBeVisible();
+    await page.getByRole("button", { name: "Save selected" }).click();
+    await expect(page.getByText("Saved 2 jobs.")).toBeVisible();
+    await expect(groups.getByRole("link", { name: "Saved 2" })).toBeVisible();
+
+    // Filters live in the URL.
+    await page.getByLabel("Work mode").selectOption("remote");
+    await expect(page).toHaveURL(/[?&]mode=remote/);
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page).toHaveURL(/\/jobs$/);
+
+    // A hidden group opens with its own count.
+    await groups.getByRole("link", { name: /^Not a fit \d+$/ }).click();
+    await expect(page).toHaveURL(/group=not_fit/);
+    await expect(groups.getByRole("link", { name: /^Not a fit \d+$/ })).toHaveAttribute("aria-current", "page");
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "for-you-not-fit");
+
+    await page.goto("/jobs");
+    await expect(selectBoxes.first()).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "for-you");
+
+    // With a CV, preferences, roles, a search and the feed seen, onboarding is complete.
+    await page.goto("/overview");
+    await expect(page.getByText("You're set up.", { exact: false })).toBeVisible();
+  });
 });

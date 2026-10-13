@@ -265,6 +265,27 @@ describe("job-search chain", () => {
     expect(await runner.searchPriority({ query: "q", location: "Pune", country: "in" })).toBeNull();
   });
 
+  it("reports a failed priority query instead of skipping it silently", async () => {
+    const store = new MemoryProviderStore();
+    const serpapi = fake(
+      "serpapi",
+      async () => {
+        throw new ProviderHttpError("serpapi", 503, "busy", null);
+      },
+      { limits: { month: 225 } },
+    );
+    const runner = createJobSearchRunner({
+      getProviders: async () => ({ providers: [serpapi], disabled: new Set() }),
+      store,
+      now: () => NOW,
+    });
+    await expect(runner.searchPriority({ query: "q", location: "Pune", country: "in" })).rejects.toBeInstanceOf(
+      AppError,
+    );
+    // Resting after the failure, it is skipped (null) without another request.
+    expect(await runner.searchPriority({ query: "q", location: "Pune", country: "in" })).toBeNull();
+  });
+
   it("explains when nothing is configured", async () => {
     const unconfigured = fake("adzuna", async () => page(1), { configured: false });
     const runner = createJobSearchRunner({

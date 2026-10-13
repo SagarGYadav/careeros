@@ -274,4 +274,27 @@ test.describe("signed in", () => {
     await page.goto("/overview");
     await expect(page.getByText("You're set up.", { exact: false })).toBeVisible();
   });
+  test("scoring settings are validated, saved as a version and can be reset", async ({ page }) => {
+    await page.goto("/settings");
+    await page.getByRole("link", { name: "Scoring settings" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Scoring" })).toBeVisible();
+    await expect(page.getByText("Using the default settings.")).toBeVisible();
+
+    await page.getByLabel("Skills", { exact: true }).fill("40");
+    await expect(page.getByText("Total: 95 of 100")).toBeVisible();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("The parts must add up to 100.")).toBeVisible();
+
+    await page.getByLabel("Experience", { exact: true }).fill("25");
+    await expect(page.getByText("Total: 100 of 100")).toBeVisible();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Scoring settings saved (version 1). New analyses use them.")).toBeVisible();
+    await expect(page.getByText(/Using your settings, version 1\./)).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "settings-scoring");
+
+    await page.getByRole("button", { name: "Reset to defaults" }).click();
+    await expect(page.getByText("Using the default settings.")).toBeVisible();
+    await expect(page.getByLabel("Skills", { exact: true })).toHaveValue("45");
+  });
 });

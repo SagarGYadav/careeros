@@ -47,6 +47,18 @@ export default function SettingsPage() {
           </LinkButton>
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Scoring</CardTitle>
+          <CardDescription>How the Fit score adds up and the thresholds for Apply and Consider.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LinkButton variant="outline" href="/settings/scoring">
+            Scoring settings
+            <ChevronRight />
+          </LinkButton>
+        </CardContent>
+      </Card>
     </>
   );
 }

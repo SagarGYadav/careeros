@@ -16,32 +16,35 @@ datasource db {
 // ---------------------------------------------------------------------------------------------------------------
 
 model User {
-  id             String               @id
-  name           String
-  email          String               @unique
-  emailVerified  Boolean              @default(false)
-  image          String?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @default(now()) @updatedAt
-  sessions       Session[]
-  accounts       Account[]
-  aiResults      AiResultCache[]
-  aiRequests     AiRequestLog[]
-  personal       PersonalDetails?
-  profile        CareerProfile?
-  skills         UserSkill[]
-  experiences    ExperienceEntry[]
-  projects       ProjectEntry[]
-  educations     EducationEntry[]
-  certifications CertificationEntry[]
-  otherSections  OtherCvSection[]
-  facts          CareerFact[]
-  resumes        ResumeVersion[]
-  files          StoredFile[]
-  targetRoles    TargetRole[]
-  companies      Company[]
-  jobs           Job[]
-  searchRuns     JobSearchRun[]
+  id              String               @id
+  name            String
+  email           String               @unique
+  emailVerified   Boolean              @default(false)
+  image           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @default(now()) @updatedAt
+  sessions        Session[]
+  accounts        Account[]
+  aiResults       AiResultCache[]
+  aiRequests      AiRequestLog[]
+  personal        PersonalDetails?
+  profile         CareerProfile?
+  skills          UserSkill[]
+  experiences     ExperienceEntry[]
+  projects        ProjectEntry[]
+  educations      EducationEntry[]
+  certifications  CertificationEntry[]
+  otherSections   OtherCvSection[]
+  facts           CareerFact[]
+  resumes         ResumeVersion[]
+  files           StoredFile[]
+  targetRoles     TargetRole[]
+  companies       Company[]
+  jobs            Job[]
+  searchRuns      JobSearchRun[]
+  jobRequirements JobRequirement[]
+  scoringConfigs  ScoringConfig[]
+  jobAnalyses     JobAnalysis[]
 
   @@map("users")
 }
@@ -278,23 +281,24 @@ model RoleFamilySkill {
 
 /// Skill taxonomy. ownerKey is "global" for the seeded catalogue, or a user id for skills a user added.
 model Skill {
-  id             String            @id @default(cuid())
-  ownerKey       String            @default("global")
-  slug           String
-  name           String
+  id              String            @id @default(cuid())
+  ownerKey        String            @default("global")
+  slug            String
+  name            String
   /// language | framework | library | styling | mobile | backend | database | testing | tooling | cloud | practice | data | soft
-  category       String
-  aliases        String[]
+  category        String
+  aliases         String[]
   /// 1 small, 2 medium, 3 large (rough effort to learn)
-  learningEffort Int               @default(2)
+  learningEffort  Int               @default(2)
   /// Curated free resources: [{ title, url }]. The AI never generates these links.
-  resources      Json?
+  resources       Json?
   /// A user-added skill not yet reviewed against the catalogue.
-  unreviewed     Boolean           @default(false)
-  roleFamilies   RoleFamilySkill[]
-  relationsFrom  SkillRelation[]   @relation("from")
-  relationsTo    SkillRelation[]   @relation("to")
-  userSkills     UserSkill[]
+  unreviewed      Boolean           @default(false)
+  roleFamilies    RoleFamilySkill[]
+  relationsFrom   SkillRelation[]   @relation("from")
+  relationsTo     SkillRelation[]   @relation("to")
+  userSkills      UserSkill[]
+  jobRequirements JobRequirement[]
 
   @@unique([ownerKey, slug])
   @@map("skills")
@@ -516,6 +520,7 @@ model ResumeVersion {
   parseProvider      String?
   injectionSuspected Boolean         @default(false)
   confirmedAt        DateTime?
+  analyses           JobAnalysis[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -579,62 +584,76 @@ model Company {
 /// The HNSW index on `embedding` is created in SQL (Prisma can't describe it): when a new migration is generated,
 /// delete any "DROP INDEX jobs_embedding_hnsw" line it adds.
 model Job {
-  id                   String                      @id @default(cuid())
-  userId               String
-  user                 User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companyId            String?
-  company              Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  id                      String                      @id @default(cuid())
+  userId                  String
+  user                    User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId               String?
+  company                 Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   /// Company as the posting wrote it (shown to the user).
-  companyName          String
-  title                String
-  roleFamilyId         String?
+  companyName             String
+  title                   String
+  roleFamilyId            String?
   /// Target roles whose searches found this job (for per-role market stats).
-  targetRoleIds        String[]
-  seniority            String?
-  location             String?
+  targetRoleIds           String[]
+  seniority               String?
+  location                String?
   /// Canonical city: Bengaluru, Gurugram, Mumbai, Remote-India, …
-  locationCity         String?
+  locationCity            String?
   /// remote | hybrid | onsite
-  workMode             String?
-  employmentType       String?
-  salaryMinAnnual      Int?
-  salaryMaxAnnual      Int?
-  salaryCurrency       String?
-  salaryText           String?
-  salaryDisclosed      Boolean                     @default(false)
-  expMinYears          Float?
-  expMaxYears          Float?
-  descriptionRaw       String
-  descriptionHash      String
-  descriptionTruncated Boolean                     @default(false)
+  workMode                String?
+  employmentType          String?
+  salaryMinAnnual         Int?
+  salaryMaxAnnual         Int?
+  salaryCurrency          String?
+  salaryText              String?
+  salaryDisclosed         Boolean                     @default(false)
+  expMinYears             Float?
+  expMaxYears             Float?
+  descriptionRaw          String
+  descriptionHash         String
+  descriptionTruncated    Boolean                     @default(false)
   /// search | deep_search | paste | url | manual | csv
-  origin               String
+  origin                  String
   /// adzuna | jooble | serpapi | greenhouse | lever | … | mock
-  provider             String
-  externalId           String
-  postedVia            String?
-  isDirectFromCompany  Boolean                     @default(false)
+  provider                String
+  externalId              String
+  postedVia               String?
+  isDirectFromCompany     Boolean                     @default(false)
   /// [{ site, url }], merged when duplicates are found
-  applyLinks           Json
-  postedAt             DateTime?
-  discoveredAt         DateTime                    @default(now())
+  applyLinks              Json
+  postedAt                DateTime?
+  discoveredAt            DateTime                    @default(now())
   /// new | saved | dismissed
-  feedStatus           String                      @default("new")
-  dismissReason        String?
+  feedStatus              String                      @default("new")
+  dismissReason           String?
   /// Relevance (SPEC §10.5), 0–100, and its parts with reasons.
-  quickScore           Int?
-  scoreParts           Json?
-  searchRunId          String?
+  quickScore              Int?
+  scoreParts              Json?
+  searchRunId             String?
   /// { noticePeriodMaxDays, immediateJoiner, bond, shift, contractToHire, wfoDaysPerWeek } found by regex
-  conditions           Json?
-  isStale              Boolean                     @default(false)
+  conditions              Json?
+  isStale                 Boolean                     @default(false)
   /// Why the job is hidden as "Not a fit" (seniority, location, dealbreakers); empty when it fits.
-  notFitReasons        String[]
-  embedding            Unsupported("vector(384)")?
-  embeddingModel       String?
-  embeddedAt           DateTime?
-  createdAt            DateTime                    @default(now())
-  updatedAt            DateTime                    @updatedAt
+  notFitReasons           String[]
+  embedding               Unsupported("vector(384)")?
+  embeddingModel          String?
+  embeddedAt              DateTime?
+  /// From JobExtractor (SPEC §12.5): what the job involves, in the posting's words.
+  responsibilities        String[]
+  /// Other extracted fields: { domain, employmentType, seniority, experience, roleFamilySlug, droppedRequirements }
+  extraction              Json?
+  extractedAt             DateTime?
+  /// ai | cache | no_ai, with the provider/model and prompt version that produced the extraction.
+  extractionMode          String?
+  extractionModel         String?
+  extractionPromptVersion String?
+  /// The description hash the extraction was made from; a changed description is extracted again.
+  extractionSourceHash    String?
+  injectionSuspected      Boolean                     @default(false)
+  requirements            JobRequirement[]
+  analyses                JobAnalysis[]
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
 
   @@unique([userId, provider, externalId])
   @@index([userId, feedStatus, quickScore])
@@ -670,4 +689,85 @@ model JobSearchRun {
 
   @@index([userId, createdAt])
   @@map("job_search_runs")
+}
+
+/// One requirement of a job (SPEC §12), cited in Fit Reports by its id R1…Rn.
+model JobRequirement {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String
+  job           Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// R1…Rn within the job.
+  reqId         String
+  skillId       String?
+  skill         Skill?  @relation(fields: [skillId], references: [id], onDelete: SetNull)
+  text          String
+  /// skill | experience | education | domain | responsibility | soft | other
+  kind          String
+  /// required | preferred | nice_to_have | implied
+  importance    String
+  yearsRequired Float?
+  /// The words in the posting this requirement comes from (checked against the description).
+  quote         String
+  /// ai | user | keyword
+  source        String
+  sortOrder     Int
+
+  @@unique([jobId, reqId])
+  @@index([userId, jobId])
+  @@index([skillId])
+  @@map("job_requirements")
+}
+
+/// The user's Fit-score settings (SPEC §12.2). Each save adds a version; analyses record the version they used.
+model ScoringConfig {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version    Int
+  /// { skills, experience, roleAlignment, location, salary } — component maxima, summing to 100
+  weights    Json
+  /// { apply, consider }
+  thresholds Json
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, version])
+  @@index([userId, active])
+  @@map("scoring_configs")
+}
+
+/// A Fit analysis of one job (SPEC §12): the score and its parts computed in code; the report text comes from
+/// FitAnalyst. Cached by the hash of every input, so an unchanged job and profile is never analysed twice.
+model JobAnalysis {
+  id                   String         @id @default(cuid())
+  userId               String
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId                String
+  job                  Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resumeVersionId      String?
+  resumeVersion        ResumeVersion? @relation(fields: [resumeVersionId], references: [id], onDelete: SetNull)
+  /// 0 = the built-in defaults.
+  scoringConfigVersion Int
+  scoreTotal           Int
+  /// Components, requirement statuses and condition checks.
+  breakdown            Json
+  /// APPLY | CONSIDER | LOW_PRIORITY
+  recommendation       String
+  blockers             Json
+  gains                Json
+  salaryContext        Json?
+  /// FitAnalyst output (SPEC §12.4), added in step 4b.
+  report               Json?
+  validation           Json?
+  model                String?
+  promptVersion        String?
+  inputHash            String
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@unique([userId, jobId, inputHash])
+  @@index([userId, jobId, createdAt])
+  @@map("job_analyses")
 }

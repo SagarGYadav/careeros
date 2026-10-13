@@ -7,7 +7,8 @@ import { canonicalCity } from "@/lib/jobs/normalize";
 import { buildSearchPlan, type PlannedQuery } from "@/lib/jobs/plan";
 import { prepareJob, type PreparedJob } from "@/lib/jobs/prepare";
 import { scoreJob, type RankingProfile } from "@/lib/jobs/relevance";
-import type { Conditions } from "@/lib/jobs/conditions";
+import { readConditions } from "@/lib/jobs/conditions";
+import { storedDealbreakersSchema } from "@/lib/validation/profile";
 import type { ApplyLink, JobSearchParams, NormalizedJob } from "@/lib/jobsearch/types";
 import { embeddings, loadEmbeddingProviders } from "@/server/embeddings/runner";
 import { jobSearch } from "@/server/jobsearch/runner";
@@ -306,24 +307,6 @@ async function saveResults(
 // ---------------------------------------------------------------------------------------------------------------
 // Ranking context: the profile as relevance ranking sees it.
 
-const dealbreakersSchema = z
-  .object({
-    bond: z.boolean().catch(false),
-    nightShift: z.boolean().catch(false),
-    contractToHire: z.boolean().catch(false),
-    maxWfoDaysPerWeek: z.number().nullable().catch(null),
-  })
-  .catch({ bond: false, nightShift: false, contractToHire: false, maxWfoDaysPerWeek: null });
-
-const NO_CONDITIONS: Conditions = {
-  noticePeriodMaxDays: null,
-  immediateJoiner: false,
-  bond: false,
-  shift: null,
-  contractToHire: false,
-  wfoDaysPerWeek: null,
-};
-
 type RankingContext = { profile: RankingProfile; catalogue: string[]; dismissedCompanyIds: Set<string> };
 
 /**
@@ -375,7 +358,7 @@ async function rankingContext(userId: string): Promise<RankingContext> {
       openToRelocate: career?.openToRelocate ?? false,
       expectedSalaryMin: career?.expectedCtcMin ?? null,
       noticePeriodDays: career?.noticePeriodDays ?? null,
-      dealbreakers: dealbreakersSchema.parse(career?.dealbreakers ?? {}),
+      dealbreakers: storedDealbreakersSchema.parse(career?.dealbreakers ?? {}),
     },
   };
 }
@@ -404,7 +387,7 @@ async function scorePage(
         expMinYears: job.expMinYears,
         expMaxYears: job.expMaxYears,
         seniority: job.seniority,
-        conditions: { ...NO_CONDITIONS, ...((job.conditions as Partial<Conditions> | null) ?? {}) },
+        conditions: readConditions(job.conditions),
         semantic: similarity.get(job.id) ?? null,
         companyDismissed: Boolean(job.companyId && ranking.dismissedCompanyIds.has(job.companyId)),
       },

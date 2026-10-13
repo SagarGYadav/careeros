@@ -69,3 +69,13 @@ export const PROFICIENCY_LABELS: Record<number, string> = {
 
 /** Server Actions reject very large payloads before parsing them. */
 export const MAX_ACTION_PAYLOAD_CHARS = 300_000;
+
+/** Dealbreakers as stored on the career profile (JSON); anything missing or invalid counts as "not a dealbreaker". */
+export const storedDealbreakersSchema = z
+  .object({
+    bond: z.boolean().catch(false),
+    nightShift: z.boolean().catch(false),
+    contractToHire: z.boolean().catch(false),
+    maxWfoDaysPerWeek: z.number().nullable().catch(null),
+  })
+  .catch({ bond: false, nightShift: false, contractToHire: false, maxWfoDaysPerWeek: null });

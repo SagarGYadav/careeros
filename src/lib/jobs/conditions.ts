@@ -43,6 +43,20 @@ export type Conditions = {
   wfoDaysPerWeek: number | null;
 };
 
+export const NO_CONDITIONS: Conditions = {
+  noticePeriodMaxDays: null,
+  immediateJoiner: false,
+  bond: false,
+  shift: null,
+  contractToHire: false,
+  wfoDaysPerWeek: null,
+};
+
+/** Conditions stored on a job (JSON), with missing fields filled in. */
+export function readConditions(value: unknown): Conditions {
+  return { ...NO_CONDITIONS, ...((value as Partial<Conditions> | null) ?? {}) };
+}
+
 export function parseConditions(text: string): Conditions {
   const t = text.toLowerCase();
   const immediateJoiner = /\bimmediate\s+(joiners?|joining|start)\b|\bjoin\s+immediately\b/.test(t);

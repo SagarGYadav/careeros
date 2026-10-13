@@ -34,6 +34,21 @@ export async function listSkillImplicationIds(userId: string): Promise<Map<strin
   return map;
 }
 
+/** "related" relations by id, in both directions (Redux ↔ Zustand): for each skill id, its related skill ids. */
+export async function listSkillRelatedIds(userId: string): Promise<Map<string, string[]>> {
+  const rows = await db.skillRelation.findMany({
+    where: { type: "related", from: { ownerKey: { in: ["global", userId] } } },
+    select: { toSkillId: true, fromSkillId: true },
+  });
+  const map = new Map<string, string[]>();
+  const link = (a: string, b: string) => map.set(a, [...(map.get(a) ?? []), b]);
+  for (const row of rows) {
+    link(row.fromSkillId, row.toSkillId);
+    link(row.toSkillId, row.fromSkillId);
+  }
+  return map;
+}
+
 /** A user-owned skill for a name the catalogue doesn't know; marked unreviewed. */
 export function createUserOwnedSkills(userId: string, skills: { id: string; slug: string; name: string }[]) {
   return db.skill.createMany({

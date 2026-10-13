@@ -173,4 +173,28 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "profile-education");
   });
+
+  test("target roles are suggested from the CV, selected and edited", async ({ page }) => {
+    await page.goto("/overview");
+    await page.getByRole("link", { name: "Target roles" }).click();
+    await expect(page.getByRole("heading", { name: "No target roles yet" })).toBeVisible();
+    await page.getByRole("button", { name: "Suggest roles" }).click();
+    await expect(page.getByText(/roles suggested \(mock AI\)/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /^Core/ })).toBeVisible();
+    const fullStack = page.getByRole("checkbox", { name: "Use Full Stack Developer in job search" });
+    await expect(fullStack).toBeVisible();
+    await expect(page.getByText(/\d+ of \d+ roles selected for job search/)).toBeVisible();
+
+    await page.getByLabel("Job title to add").fill("Platform Engineer");
+    await page.getByRole("button", { name: "Add role" }).click();
+    await expect(page.getByRole("heading", { level: 3, name: "Platform Engineer" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Use Platform Engineer in job search" })).toBeChecked();
+
+    await page.getByRole("button", { name: "Remove role Platform Engineer" }).click();
+    await expect(page.getByRole("heading", { level: 3, name: "Platform Engineer" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByRole("heading", { level: 3, name: "Platform Engineer" })).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "target-roles");
+  });
 });

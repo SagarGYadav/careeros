@@ -23,6 +23,17 @@ export async function listSkillImplications(userId: string): Promise<Map<string,
   return map;
 }
 
+/** "implies" relations by id: for each skill id, the ids of the skills that imply it. */
+export async function listSkillImplicationIds(userId: string): Promise<Map<string, string[]>> {
+  const rows = await db.skillRelation.findMany({
+    where: { type: "implies", from: { ownerKey: { in: ["global", userId] } } },
+    select: { toSkillId: true, fromSkillId: true },
+  });
+  const map = new Map<string, string[]>();
+  for (const row of rows) map.set(row.toSkillId, [...(map.get(row.toSkillId) ?? []), row.fromSkillId]);
+  return map;
+}
+
 /** A user-owned skill for a name the catalogue doesn't know; marked unreviewed. */
 export function createUserOwnedSkills(userId: string, skills: { id: string; slug: string; name: string }[]) {
   return db.skill.createMany({

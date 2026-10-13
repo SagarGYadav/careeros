@@ -38,6 +38,7 @@ model User {
   facts          CareerFact[]
   resumes        ResumeVersion[]
   files          StoredFile[]
+  targetRoles    TargetRole[]
 
   @@map("users")
 }
@@ -250,6 +251,7 @@ model RoleFamily {
   seniorityBands Json
   adjacentSlugs  String[]
   coreSkills     RoleFamilySkill[]
+  targetRoles    TargetRole[]
 
   @@map("role_families")
 }
@@ -509,4 +511,34 @@ model ResumeVersion {
 
   @@index([userId, createdAt])
   @@map("resume_versions")
+}
+
+/// A role the user wants to find jobs for (SPEC §4, §10.1). Category (core / adjacent / stretch) and seniority are
+/// computed in code from the user's skills and years when shown, so they follow profile edits.
+model TargetRole {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleFamilyId   String?
+  roleFamily     RoleFamily? @relation(fields: [roleFamilyId], references: [id], onDelete: SetNull)
+  title          String
+  /// Why it fits, written by the AI and checked against the CV evidence catalog.
+  reason         String?
+  /// False when the reason cites evidence ids that don't exist or numbers the evidence doesn't contain.
+  reasonVerified Boolean     @default(true)
+  evidenceIds    String[]
+  titleVariants  String[]
+  keywords       String[]
+  /// Openings found, average fit and most common missing skill, filled after each search (Phase 3d).
+  marketStats    Json?
+  /// ai | user | no_ai
+  source         String
+  /// Used for job search.
+  selected       Boolean     @default(false)
+  sortOrder      Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([userId, selected])
+  @@map("target_roles")
 }

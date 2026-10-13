@@ -59,7 +59,7 @@ session (local or cloud) can continue.
 - **Accept:** e2e with mock AI on every fixture; §9.4 targets met with real Gemini (numbers in Decisions).
 
 ### Phase 3 — Suggested roles, job search and relevance ranking · L · SPEC §7.2, §10
-- [ ] 3a RoleSuggester + Target roles page (Core / Adjacent / Stretch by code, title variants, keywords)
+- [x] 3a RoleSuggester + Target roles page (Core / Adjacent / Stretch by code, title variants, keywords)
 - [ ] 3b Job-search chain (Adzuna → Jooble → SerpApi Google Jobs + priority queries, account-endpoint quota, mock) and
       embedding chain (local `bge-small-en-v1.5` → same model on Cloudflare, mock); Job embedding column + HNSW index
 - [ ] 3c Resumable search runs: normalisation, `parseSalary`, conditions regex, fuzzy dedupe with merged apply links,
@@ -186,3 +186,5 @@ _(date — decision — reason)_
 - 2026-10-13 — Google's free quotas are per model and the newest Flash allows about 20 requests a day. Gemini is now two providers on one key: `gemini` (Flash, limit 18/day) and `gemini-lite` (Flash-Lite, own quota), so using up Flash no longer takes Google out of the chain. Default chain: gemini → gemini-lite → groq → openrouter. The eval waits for the chosen provider instead of scoring the deterministic fallback.
 - 2026-10-13 — ResumeParser prompt v2 adds two rules (project description vs bullets; degree vs field). Bumping the version keeps cached v1 answers from being reused.
 - 2026-10-13 — `npm audit` findings above accepted by the project owner: high advisories only in Prisma's tooling (`mysql2`, `deepmerge-ts`) and dev-only tools; moderate ones only in `mammoth`'s command-line helper. None is reachable from the running app; CI keeps failing on critical findings. Revisit when Prisma ships fixed versions.
+- 2026-10-13 — Target roles: the RoleSuggester (balanced tier, prompt v1) proposes roles with reasons citing CV evidence ids, title variants and keywords; code maps unknown slugs to catalog families by title (similarity ≥ 0.85), drops duplicates, caps at 10 and keeps roles the user added or selected when suggesting again. Category (Core ≥ 70%, Adjacent 40–69%, Stretch < 40% of core skills at level 3+, implied skills counted) and seniority (from computed years) are derived when the page loads, so they follow skill edits; they are not stored. Up to three Core roles are pre-selected for search the first time.
+- 2026-10-13 — Evidence validator (`lib/evidence/validate.ts`, SPEC §8.4): a reason is verified only when it cites existing evidence ids and every number in it appears in the cited evidence or a computed fact (rounding down allowed, "5+ years" for 5.4). Unverified reasons are shown with an "Unverified" badge. Live check (fictional Ananya CV): Gemini Flash and Groq each suggested 6 catalog roles, all reasons verified.

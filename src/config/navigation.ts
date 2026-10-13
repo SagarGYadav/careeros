@@ -36,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Jobs",
     items: [
       { title: "For you", href: "/jobs", icon: Briefcase, enabled: false, keywords: ["feed", "matches"] },
-      { title: "Target roles", href: "/jobs/roles", icon: Target, enabled: false },
+      { title: "Target roles", href: "/jobs/roles", icon: Target, enabled: true, keywords: ["roles", "suggest"] },
       { title: "Company sites", href: "/jobs/company-sites", icon: Building2, enabled: false },
     ],
   },

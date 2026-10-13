@@ -28,6 +28,7 @@ export function TagsInput({
   placeholder,
   "aria-describedby": describedBy,
   "aria-label": ariaLabel,
+  itemName = "",
 }: {
   id?: string;
   value: string[];
@@ -36,6 +37,8 @@ export function TagsInput({
   placeholder?: string;
   "aria-describedby"?: string;
   "aria-label"?: string;
+  /** Names the items in remove-button labels ("Remove keyword React"), so they differ from other buttons. */
+  itemName?: string;
 }) {
   const [draft, setDraft] = useState("");
   const fallbackId = useId();
@@ -66,7 +69,7 @@ export function TagsInput({
             type="button"
             // 24px target (WCAG 2.5.8) inside a compact chip.
             className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            aria-label={`Remove ${item}`}
+            aria-label={`Remove ${itemName ? `${itemName} ` : ""}${item}`}
             onClick={() => onChange(value.filter((_, i) => i !== index))}
           >
             <X className="size-3" aria-hidden="true" />

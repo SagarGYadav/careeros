@@ -6,7 +6,10 @@ import { LinkButton } from "@/components/link-button";
 import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RolesBoard, SuggestRolesButton } from "@/features/roles/roles-board";
+import { FindJobsPanel } from "@/features/search/find-jobs-panel";
+import { TopMatches } from "@/features/search/top-matches";
 import { getCurrentUser } from "@/server/auth/session";
+import { getSearchOverview } from "@/server/services/search-runs";
 import { listTargetRolesView } from "@/server/services/target-roles";
 
 export const metadata: Metadata = { title: "Target roles" };
@@ -37,7 +40,7 @@ function RolesSkeleton() {
 
 async function Roles() {
   const user = await getCurrentUser();
-  const { roles, hasCv } = await listTargetRolesView(user.id);
+  const [{ roles, hasCv }, search] = await Promise.all([listTargetRolesView(user.id), getSearchOverview(user.id)]);
 
   if (!hasCv) {
     return (
@@ -60,7 +63,9 @@ async function Roles() {
     );
   }
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <FindJobsPanel activeRunId={search.activeRunId} canSearch={roles.some((r) => r.selected)} />
+      <TopMatches matches={search.matches} runFinishedAt={search.runFinishedAt} />
       <div className="flex justify-end">
         <SuggestRolesButton label="Suggest again" variant="outline" />
       </div>

@@ -41,6 +41,7 @@ model User {
   targetRoles    TargetRole[]
   companies      Company[]
   jobs           Job[]
+  searchRuns     JobSearchRun[]
 
   @@map("users")
 }
@@ -625,6 +626,8 @@ model Job {
   /// { noticePeriodMaxDays, immediateJoiner, bond, shift, contractToHire, wfoDaysPerWeek } found by regex
   conditions           Json?
   isStale              Boolean                     @default(false)
+  /// Why the job is hidden as "Not a fit" (seniority, location, dealbreakers); empty when it fits.
+  notFitReasons        String[]
   embedding            Unsupported("vector(384)")?
   embeddingModel       String?
   embeddedAt           DateTime?
@@ -636,4 +639,33 @@ model Job {
   @@index([userId, descriptionHash])
   @@index([userId, companyId])
   @@map("jobs")
+}
+
+/// A resumable job search (SPEC §10.4, §11.5): the browser advances it in short steps; closing the tab pauses it.
+model JobSearchRun {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// standard | deep (Phase 5)
+  kind               String    @default("standard")
+  targetRoleIds      String[]
+  /// { queries: [{ query, location, priority, roleIds }] }
+  plan               Json
+  /// Where the run is: { stage, queryIndex, … }
+  state              Json
+  requestsByProvider Json      @default("{}")
+  pagesFetched       Int       @default(0)
+  resultCount        Int       @default(0)
+  newCount           Int       @default(0)
+  duplicateCount     Int       @default(0)
+  /// [{ at, message }]
+  errors             Json      @default("[]")
+  /// running | done | failed
+  status             String    @default("running")
+  finishedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+  @@map("job_search_runs")
 }

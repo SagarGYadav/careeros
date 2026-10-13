@@ -66,6 +66,14 @@ session (local or cloud) can continue.
       deferred embeddings, relevance ranking (§10.5), "Not a fit" bucket
 - [ ] 3d "For you" feed (filters, hidden groups with counts, dismiss reasons that tune ranking, badges, bulk dismiss),
       market stats per role, onboarding checklist, usage in Settings
+**Where I stopped (3c, 2026-10-13, usage limit):** written and typechecking/linting clean, not yet tested end to end:
+`lib/jobs` (normalize, salary, conditions, dedupe, plan, prepare, relevance — 14 unit tests pass), migration
+`search_runs` (JobSearchRun + Job.notFitReasons, applied to dev and test DBs), `server/repositories/jobs.ts`,
+`search-runs.ts`, `server/services/search-runs.ts` (start/advance with 15 s steps: search → embed → rank),
+routes `/api/search-runs` and `/api/search-runs/[runId]/advance`, `features/search` (Find jobs panel, top matches)
+on the Target roles page. Next: unit tests for `buildSearchPlan`; integration test of a full mock run (dedupe merges
+apply links, scores and notFitReasons saved, mock embeddings); e2e "Find jobs" on the Target roles page; build;
+full suite; tick 3c.
 - **Accept:** mock run returns deduplicated, ranked jobs with explained relevance; unit tests for dedupe, normalisation,
   quotas, ranking and failover; one live run with real keys including a forced failover, recorded in Decisions.
 

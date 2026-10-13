@@ -197,4 +197,26 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "target-roles");
   });
+
+  test("find jobs runs a search with progress and shows ranked matches with reasons", async ({ page }) => {
+    // A run makes many round trips to the remote test database.
+    test.setTimeout(180_000);
+    await page.goto("/jobs/roles");
+    await page.getByRole("button", { name: "Find jobs" }).click();
+    await expect(page.getByText("Search job sites")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Best matches from your last search" })).toBeVisible({
+      timeout: 120_000,
+    });
+    const firstMatch = page
+      .getByRole("heading", { name: "Best matches from your last search" })
+      .locator("xpath=../..")
+      .getByRole("listitem")
+      .first();
+    await expect(firstMatch).toBeVisible();
+    await firstMatch.getByText("Relevance").click();
+    await expect(firstMatch.getByText("How the score adds up")).toBeVisible();
+    await expect(firstMatch.getByText("Skills", { exact: true })).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "find-jobs");
+  });
 });

@@ -62,18 +62,10 @@ session (local or cloud) can continue.
 - [x] 3a RoleSuggester + Target roles page (Core / Adjacent / Stretch by code, title variants, keywords)
 - [x] 3b Job-search chain (Adzuna → Jooble → SerpApi Google Jobs + priority queries, account-endpoint quota, mock) and
       embedding chain (local `bge-small-en-v1.5` → same model on Cloudflare, mock); Job embedding column + HNSW index
-- [ ] 3c Resumable search runs: normalisation, `parseSalary`, conditions regex, fuzzy dedupe with merged apply links,
+- [x] 3c Resumable search runs: normalisation, `parseSalary`, conditions regex, fuzzy dedupe with merged apply links,
       deferred embeddings, relevance ranking (§10.5), "Not a fit" bucket
 - [ ] 3d "For you" feed (filters, hidden groups with counts, dismiss reasons that tune ranking, badges, bulk dismiss),
       market stats per role, onboarding checklist, usage in Settings
-**Where I stopped (3c, 2026-10-13, usage limit):** written and typechecking/linting clean, not yet tested end to end:
-`lib/jobs` (normalize, salary, conditions, dedupe, plan, prepare, relevance — 14 unit tests pass), migration
-`search_runs` (JobSearchRun + Job.notFitReasons, applied to dev and test DBs), `server/repositories/jobs.ts`,
-`search-runs.ts`, `server/services/search-runs.ts` (start/advance with 15 s steps: search → embed → rank),
-routes `/api/search-runs` and `/api/search-runs/[runId]/advance`, `features/search` (Find jobs panel, top matches)
-on the Target roles page. Next: unit tests for `buildSearchPlan`; integration test of a full mock run (dedupe merges
-apply links, scores and notFitReasons saved, mock embeddings); e2e "Find jobs" on the Target roles page; build;
-full suite; tick 3c.
 - **Accept:** mock run returns deduplicated, ranked jobs with explained relevance; unit tests for dedupe, normalisation,
   quotas, ranking and failover; one live run with real keys including a forced failover, recorded in Decisions.
 
@@ -199,3 +191,6 @@ _(date — decision — reason)_
 - 2026-10-13 — Job search: Adzuna (main; published free limits 25/min, 250/day, 2,500/month, we stop at 20/225/2,250; descriptions cut to ~500 chars; listings need a "Jobs by Adzuna" label in the UI) → Jooble (free key; India works by country only, so the city goes into the keywords; ~119 React jobs India-wide) → SerpApi Google Jobs (free plan 250 searches/month, limit 225; full descriptions, "via" and every apply link; the remaining count comes from SerpApi's free account endpoint and is stored as the provider-reported allowance). Live check: Adzuna 50 Bengaluru React jobs, Jooble 30, SerpApi 10 with up to 8 apply links, forced Adzuna 429 → Jooble answered.
 - 2026-10-13 — Embeddings: bge-small-en-v1.5 locally with `@huggingface/transformers` (approved by the owner; full-precision ONNX, ~130 MB downloaded once to `.cache/transformers`) → the same model on Cloudflare Workers AI (`pooling: "cls"`). Measured cosine local vs Cloudflare: 1.0000 (0.9996 through the chain); the q8 model would be 0.997 and was not used, to keep vectors from both identical. Every vector stores its model; vectors are only compared within one model. All pgvector SQL is in `server/repositories/vectors.ts`; the HNSW index is created in migration SQL.
 - 2026-10-13 — Settings → Services lists all three chains (AI, job search, embeddings) with reorder, on/off and a Test button; SerpApi's test uses its account endpoint so it costs no search. Integration tests and the Playwright server force mock AI, job search and embeddings.
+- 2026-10-13 — Search runs (SPEC §10.4, §11.5): plan = selected roles' first three title variants × preferred cities (+ "Remote" when remote is a work mode; the country when no location is set), interleaved and capped at `JOB_SEARCH_MAX_QUERIES_PER_RUN` (8); the first `SERPAPI_PRIORITY_QUERIES_PER_RUN` (2) also go to SerpApi. Each `advance` call works for ≤ 15 s (search → embed → rank) and saves its state; one run per user at a time; the browser drives it and resumes it when the page reopens. A city of residence from the CV is never used as a search location (personal details stay private).
+- 2026-10-13 — Postings are cleaned in code: legal suffixes removed, canonical cities, `parseSalary` (LPA, lakhs, monthly, ranges, USD), experience ranges, seniority, conditions (notice, bond, night shifts, contract-to-hire, office days). Adzuna's estimated salaries are not shown as disclosed. Duplicates (same listing, same description, or same company + city with titles ≥ 90% alike within 30 days) merge: the fuller description wins and every apply link is kept; re-seeing a listing writes nothing unless it adds something.
+- 2026-10-13 — Relevance (SPEC §10.5) as specified: skills 30 (job's catalogue skills held at level 3+, implied skills counted), semantic 20 (cosine 0.55→0, 0.85→1; when not embedded its weight is spread over the rest), title 20, experience 15, location/work mode 10, salary 5; unknown inputs are neutral (0.5) and labelled. "Not a fit" reasons (far above/below the user's years, outside locations, dealbreakers, notice period) hide a job without changing its score.

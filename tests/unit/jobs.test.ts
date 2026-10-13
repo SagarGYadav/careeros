@@ -9,6 +9,7 @@ import {
   isDirectFromCompany,
   isStaffingAgency,
 } from "@/lib/jobs/normalize";
+import { buildSearchPlan } from "@/lib/jobs/plan";
 import { prepareJob } from "@/lib/jobs/prepare";
 import { scoreJob, type RankingJob, type RankingProfile } from "@/lib/jobs/relevance";
 import { parseSalary } from "@/lib/jobs/salary";
@@ -249,5 +250,47 @@ describe("relevance (quick match)", () => {
       "Office 5 days a week (you accept 3).",
       "Wants joiners within 15 days; your notice is 60.",
     ]);
+  });
+});
+
+describe("search plan", () => {
+  const roles = [
+    { id: "r1", titleVariants: ["React Developer", "Frontend Engineer", "UI Developer"] },
+    { id: "r2", titleVariants: ["Next.js Developer", "React Developer"] },
+  ];
+  it("interleaves roles and locations, merges repeated queries and marks the first ones as priority", () => {
+    const plan = buildSearchPlan({
+      roles,
+      locations: ["Bengaluru", "Remote-India"],
+      wantsRemote: false,
+      maxQueries: 8,
+      priorityCount: 2,
+      countryName: "India",
+    });
+    expect(plan.map((q) => `${q.query}@${q.location}`)).toEqual([
+      "React Developer@Bengaluru",
+      "Next.js Developer@Bengaluru",
+      "React Developer@Remote",
+      "Next.js Developer@Remote",
+      "Frontend Engineer@Bengaluru",
+      "Frontend Engineer@Remote",
+      "UI Developer@Bengaluru",
+      "UI Developer@Remote",
+    ]);
+    expect(plan.filter((q) => q.priority)).toHaveLength(2);
+    // The second role's "React Developer" is the first role's query, so it is searched once for both.
+    expect(plan[0].roleIds).toEqual(["r1", "r2"]);
+  });
+  it("searches the whole country when no location is set, and respects the cap", () => {
+    const plan = buildSearchPlan({
+      roles,
+      locations: [],
+      wantsRemote: false,
+      maxQueries: 3,
+      priorityCount: 2,
+      countryName: "India",
+    });
+    expect(plan).toHaveLength(3);
+    expect(plan.every((q) => q.location === "India")).toBe(true);
   });
 });

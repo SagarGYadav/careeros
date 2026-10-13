@@ -7,3 +7,5 @@ if (!process.env.DATABASE_URL_TEST) {
 process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 // Automated tests never call real AI providers (CLAUDE.md usage discipline), whatever `.env` says.
 process.env.AI_PROVIDERS = "mock";
+process.env.JOB_SEARCH_PROVIDERS = "mock";
+process.env.EMBEDDING_PROVIDERS = "mock";

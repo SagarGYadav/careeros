@@ -4,10 +4,12 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/server/auth/session";
 import { ai } from "@/server/ai/runner";
+import { testEmbeddingProvider } from "@/server/embeddings/runner";
+import { jobSearch } from "@/server/jobsearch/runner";
 import { moveProvider, setProviderEnabled } from "@/server/services/provider-settings";
 
-// Only the AI chain exists so far; job search, web search and embeddings join in their phases.
-const service = z.enum(["ai"]);
+// Web search joins in Phase 5.
+const service = z.enum(["ai", "job_search", "embeddings"]);
 const name = z.string().min(1).max(40);
 
 export async function moveProviderAction(input: unknown) {
@@ -27,7 +29,13 @@ export async function setProviderEnabledAction(input: unknown) {
 export async function testProviderAction(input: unknown): Promise<{ ok: boolean; message: string }> {
   await requireUser();
   const parsed = z.object({ service, name }).parse(input);
-  const result = await ai.testProvider(parsed.name);
+  const result =
+    parsed.service === "ai"
+      ? await ai.testProvider(parsed.name)
+      : parsed.service === "job_search"
+        ? await jobSearch.testProvider(parsed.name)
+        : await testEmbeddingProvider(parsed.name);
   refresh();
-  return { ok: result.ok, message: result.latencyMs ? `${result.message} ${result.latencyMs} ms.` : result.message };
+  const latency = "latencyMs" in result && result.latencyMs ? ` ${result.latencyMs} ms.` : "";
+  return { ok: result.ok, message: `${result.message}${latency}` };
 }

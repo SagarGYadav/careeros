@@ -39,3 +39,6 @@ npm-debug.log*
 *.pem
 .DS_Store
 Thumbs.db
+
+# Downloaded models (transformers.js)
+/.cache/

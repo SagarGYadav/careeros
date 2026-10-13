@@ -31,7 +31,13 @@ function roleLabel(rows: ProviderRow[], index: number): string {
   return realBefore === 0 ? "Main" : `Backup ${realBefore}`;
 }
 
-export function ProviderChainTable({ service, rows }: { service: "ai"; rows: ProviderRow[] }) {
+export function ProviderChainTable({
+  service,
+  rows,
+}: {
+  service: "ai" | "job_search" | "embeddings";
+  rows: ProviderRow[];
+}) {
   const [pending, startTransition] = useTransition();
 
   const run = (action: () => Promise<void>) => startTransition(action);

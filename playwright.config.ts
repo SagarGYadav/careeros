@@ -26,6 +26,8 @@ export default defineConfig({
       BETTER_AUTH_URL: baseURL,
       // Automated tests never call real AI providers, whatever .env says.
       AI_PROVIDERS: "mock",
+      JOB_SEARCH_PROVIDERS: "mock",
+      EMBEDDING_PROVIDERS: "mock",
     },
   },
 });

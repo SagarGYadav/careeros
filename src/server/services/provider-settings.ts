@@ -1,17 +1,15 @@
 import "server-only";
-import type { ServiceName } from "@/lib/providers/types";
-import { loadAiProviders } from "@/server/ai/runner";
 import { getProviderSetting, saveProviderSetting } from "@/server/repositories/provider-state";
+import { SERVICES, type BuiltService } from "@/server/services/service-status";
 
 // Settings → Services: reorder and switch providers on or off. Only services that are built are listed here.
 
-async function currentOrder(service: ServiceName): Promise<string[]> {
-  if (service !== "ai") throw new Error(`Unknown service: ${service}`);
-  const { providers } = await loadAiProviders();
+async function currentOrder(service: BuiltService): Promise<string[]> {
+  const { providers } = await SERVICES[service].load();
   return providers.map((p) => p.name);
 }
 
-export async function moveProvider(service: ServiceName, name: string, direction: "up" | "down"): Promise<void> {
+export async function moveProvider(service: BuiltService, name: string, direction: "up" | "down"): Promise<void> {
   const order = await currentOrder(service);
   const index = order.indexOf(name);
   const target = direction === "up" ? index - 1 : index + 1;
@@ -21,7 +19,7 @@ export async function moveProvider(service: ServiceName, name: string, direction
   await saveProviderSetting(service, { order, disabled });
 }
 
-export async function setProviderEnabled(service: ServiceName, name: string, enabled: boolean): Promise<void> {
+export async function setProviderEnabled(service: BuiltService, name: string, enabled: boolean): Promise<void> {
   const order = await currentOrder(service);
   if (!order.includes(name)) return;
   const setting = await getProviderSetting(service);

@@ -39,6 +39,8 @@ model User {
   resumes        ResumeVersion[]
   files          StoredFile[]
   targetRoles    TargetRole[]
+  companies      Company[]
+  jobs           Job[]
 
   @@map("users")
 }
@@ -214,8 +216,8 @@ model PersonalDetails {
 }
 
 model CareerProfile {
-  userId                String    @id
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String                      @id
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   headline              String?
   summary               String?
   /// Computed from experience dates (overlaps merged), not taken from the AI.
@@ -224,18 +226,23 @@ model CareerProfile {
   currentCtc            Int?
   expectedCtcMin        Int?
   expectedCtcMax        Int?
-  currency              String    @default("INR")
+  currency              String                      @default("INR")
   noticePeriodDays      Int?
   preferredLocations    String[]
   /// remote | hybrid | onsite
   workModes             String[]
-  openToRelocate        Boolean   @default(false)
+  openToRelocate        Boolean                     @default(false)
   /// { bond, nightShift, contractToHire, maxWfoDaysPerWeek }: conditions the user never accepts.
   dealbreakers          Json?
   domains               String[]
   onboardingCompletedAt DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  /// CV profile vector for semantic matching (SPEC §10.5): summary + bullets + skills, bge-small-en-v1.5.
+  embedding             Unsupported("vector(384)")?
+  /// The model that made `embedding`; vectors are only compared with vectors of the same model.
+  embeddingModel        String?
+  embeddingSourceHash   String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 
   @@map("career_profiles")
 }
@@ -541,4 +548,92 @@ model TargetRole {
 
   @@index([userId, selected])
   @@map("target_roles")
+}
+
+/// An employer, one row per user and normalised name (SPEC §4). Staffing agencies and companies the user blocks
+/// are kept so their postings can be hidden.
+model Company {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  /// Lower case, legal suffixes removed ("Kestrel Pay Pvt. Ltd." → "kestrel pay").
+  normalizedName   String
+  aliases          String[]
+  website          String?
+  careersUrl       String?
+  isStaffingAgency Boolean  @default(false)
+  isBlocked        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  jobs             Job[]
+
+  @@unique([userId, normalizedName])
+  @@map("companies")
+}
+
+/// A job posting found by search (or added by hand later). It may exist without an application (SPEC §4).
+/// The HNSW index on `embedding` is created in SQL (Prisma can't describe it): when a new migration is generated,
+/// delete any "DROP INDEX jobs_embedding_hnsw" line it adds.
+model Job {
+  id                   String                      @id @default(cuid())
+  userId               String
+  user                 User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId            String?
+  company              Company?                    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  /// Company as the posting wrote it (shown to the user).
+  companyName          String
+  title                String
+  roleFamilyId         String?
+  /// Target roles whose searches found this job (for per-role market stats).
+  targetRoleIds        String[]
+  seniority            String?
+  location             String?
+  /// Canonical city: Bengaluru, Gurugram, Mumbai, Remote-India, …
+  locationCity         String?
+  /// remote | hybrid | onsite
+  workMode             String?
+  employmentType       String?
+  salaryMinAnnual      Int?
+  salaryMaxAnnual      Int?
+  salaryCurrency       String?
+  salaryText           String?
+  salaryDisclosed      Boolean                     @default(false)
+  expMinYears          Float?
+  expMaxYears          Float?
+  descriptionRaw       String
+  descriptionHash      String
+  descriptionTruncated Boolean                     @default(false)
+  /// search | deep_search | paste | url | manual | csv
+  origin               String
+  /// adzuna | jooble | serpapi | greenhouse | lever | … | mock
+  provider             String
+  externalId           String
+  postedVia            String?
+  isDirectFromCompany  Boolean                     @default(false)
+  /// [{ site, url }], merged when duplicates are found
+  applyLinks           Json
+  postedAt             DateTime?
+  discoveredAt         DateTime                    @default(now())
+  /// new | saved | dismissed
+  feedStatus           String                      @default("new")
+  dismissReason        String?
+  /// Relevance (SPEC §10.5), 0–100, and its parts with reasons.
+  quickScore           Int?
+  scoreParts           Json?
+  searchRunId          String?
+  /// { noticePeriodMaxDays, immediateJoiner, bond, shift, contractToHire, wfoDaysPerWeek } found by regex
+  conditions           Json?
+  isStale              Boolean                     @default(false)
+  embedding            Unsupported("vector(384)")?
+  embeddingModel       String?
+  embeddedAt           DateTime?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+
+  @@unique([userId, provider, externalId])
+  @@index([userId, feedStatus, quickScore])
+  @@index([userId, descriptionHash])
+  @@index([userId, companyId])
+  @@map("jobs")
 }

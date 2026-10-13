@@ -168,6 +168,8 @@ type RunOptions<P extends ProviderInfo, R> = {
   now?: () => Date;
   call: (provider: P) => Promise<R>;
   classify: (error: unknown) => ClassifiedFailure;
+  /** The allowance left as the provider itself reported it (e.g. SerpApi's account count), when it does. */
+  remainingOf?: (result: R) => number | null | undefined;
   /** Called after every failed attempt, e.g. to log it. */
   onFailure?: (provider: P, failure: ClassifiedFailure) => void | Promise<void>;
 };
@@ -201,7 +203,11 @@ export async function runWithFailover<P extends ProviderInfo, R>(
       try {
         const result = await call(provider);
         const health = await store.getHealth(service, provider.name);
-        await store.saveHealth(service, provider.name, healthAfterSuccess(health, now()));
+        await store.saveHealth(
+          service,
+          provider.name,
+          healthAfterSuccess(health, now(), options.remainingOf?.(result)),
+        );
         attempts.push({ provider: provider.name, outcome: "succeeded" });
         const fallback = preferred && preferred.name !== provider.name ? preferred : null;
         return {

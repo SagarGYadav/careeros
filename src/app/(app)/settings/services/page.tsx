@@ -5,10 +5,29 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProviderChainTable, type ProviderRow } from "@/features/services/provider-chain-table";
-import { loadAiProviders } from "@/server/ai/runner";
-import { getAiServiceSummary } from "@/server/services/service-status";
+import { SERVICES, getServiceSummary, type BuiltService } from "@/server/services/service-status";
 
 export const metadata: Metadata = { title: "Services" };
+
+const CARDS: { service: BuiltService; description: string; envVar: string }[] = [
+  {
+    service: "ai",
+    description: "Reads your CV and writes analysis. Requests go to the first available provider in this order.",
+    envVar: "AI_PROVIDERS",
+  },
+  {
+    service: "job_search",
+    description:
+      "Finds openings on job sites. Each query goes to the first available provider; SerpApi also answers a few priority queries every run while its monthly allowance lasts.",
+    envVar: "JOB_SEARCH_PROVIDERS",
+  },
+  {
+    service: "embeddings",
+    description:
+      "Turns your profile and job descriptions into vectors for semantic matching. Every provider runs the same model, so their results can be compared.",
+    envVar: "EMBEDDING_PROVIDERS",
+  },
+];
 
 export default function ServicesPage() {
   return (
@@ -23,16 +42,27 @@ export default function ServicesPage() {
         title="Services"
         description="Every outside service has a main provider and free backups. CareerOS switches automatically before a free limit runs out."
       />
-      <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
-        <AiServiceCard />
-      </Suspense>
+      {CARDS.map((card) => (
+        <Suspense key={card.service} fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
+          <ServiceCard {...card} />
+        </Suspense>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        API keys are read from <code>.env</code> and never stored in the database. Order and on/off changes here apply
+        to the whole app.
+      </p>
     </>
   );
 }
 
-async function AiServiceCard() {
-  const [summary, { providers }] = await Promise.all([getAiServiceSummary(), loadAiProviders()]);
-  const models = new Map(providers.map((p) => [p.name, [...new Set(Object.values(p.models))].join(" · ")]));
+async function ServiceCard({ service, description, envVar }: (typeof CARDS)[number]) {
+  const [summary, { providers }] = await Promise.all([getServiceSummary(service), SERVICES[service].load()]);
+  const models = new Map(
+    providers.map((p) => {
+      const info = p as { models?: Record<string, string>; model?: string };
+      return [p.name, info.models ? [...new Set(Object.values(info.models))].join(" · ") : (info.model ?? "")];
+    }),
+  );
   const rows: ProviderRow[] = summary.providers.map((p) => ({
     ...p,
     until: p.until?.toISOString() ?? null,
@@ -43,16 +73,13 @@ async function AiServiceCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">AI</CardTitle>
-        <CardDescription>
-          Reads your CV and writes analysis. Requests go to the first available provider in this order.
-        </CardDescription>
+        <CardTitle as="h2">{SERVICES[service].label}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <ProviderChainTable service="ai" rows={rows} />
+        <ProviderChainTable service={service} rows={rows} />
         <p className="text-xs text-muted-foreground">
-          API keys are read from <code>.env</code> and never stored in the database. The chain comes from{" "}
-          <code>AI_PROVIDERS</code>; order and on/off changes here apply to the whole app.
+          The chain comes from <code>{envVar}</code>.
         </p>
       </CardContent>
     </Card>

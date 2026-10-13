@@ -24,7 +24,8 @@ beforeAll(async () => {
   const bytes = new Uint8Array(readFileSync("fixtures/cv/ananya-single-column.pdf"));
   const { resumeId, draft } = await processCvUpload(userId, { fileName: "ananya.pdf", bytes }, { now: NOW });
   await confirmResume(userId, resumeId, draft, NOW);
-});
+  // Upload and confirm make many round trips to the remote test database.
+}, 120_000);
 
 afterAll(async () => {
   await db.user.deleteMany({ where: { email: { endsWith: EMAIL_DOMAIN } } });

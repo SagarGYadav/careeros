@@ -25,7 +25,7 @@ export function SectionHeader({
 
 export function SectionSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading">
+    <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading">
       <Skeleton className="h-56 w-full rounded-xl" />
       <Skeleton className="h-56 w-full rounded-xl" />
     </div>

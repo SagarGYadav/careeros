@@ -43,7 +43,7 @@ export default function ReviewPage({ params }: PageProps<"/profile/cv/[resumeId]
 
 function ReviewSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading your CV">
+    <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading your CV">
       <Skeleton className="h-10 w-72" />
       <div className="grid gap-6 lg:grid-cols-2">
         <Skeleton className="h-[70svh] rounded-xl" />

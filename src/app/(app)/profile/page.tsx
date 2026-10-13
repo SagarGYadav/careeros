@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
 function OverviewSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading your profile">
+    <div className="space-y-4" role="status" aria-busy="true" aria-label="Loading your profile">
       <Skeleton className="h-28 w-full rounded-xl" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 8 }, (_, i) => (

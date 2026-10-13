@@ -260,6 +260,7 @@ export type CvDraft = z.infer<typeof cvDraftSchema>;
 export const EVIDENCE_KINDS = [
   "experience_bullet",
   "project_bullet",
+  "project_description",
   "technologies",
   "skills",
   "certification",

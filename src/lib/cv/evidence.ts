@@ -76,7 +76,7 @@ export function buildEvidenceCatalog(
       : null;
   });
   draft.projects.forEach((project, index) => {
-    if (project.description) add("project_bullet", project.description, "projects", index);
+    if (project.description) add("project_description", project.description, "projects", index);
     for (const bullet of project.bullets) bullet.id = add("project_bullet", bullet.text, "projects", index);
     if (project.technologies.length) {
       const grounded = project.technologies.every((t) => options.isGrounded(t));

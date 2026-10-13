@@ -93,7 +93,7 @@ test.describe("signed in", () => {
     // The e2e server runs with AI_PROVIDERS=mock, so the UI must say answers are samples (CLAUDE.md rule 3).
     await expect(page.getByRole("link", { name: /Mock AI/ })).toBeVisible();
     await page.goto("/settings");
-    await page.getByRole("button", { name: "Manage services" }).click();
+    await page.getByRole("link", { name: "Manage services" }).click();
     await expect(page).toHaveURL(/\/settings\/services$/);
     await expect(page.getByRole("heading", { level: 1, name: "Services" })).toBeVisible();
     await expect(page.getByText("Mock AI (sample answers)", { exact: true })).toBeVisible();

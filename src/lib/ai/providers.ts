@@ -40,7 +40,7 @@ function gemini(env: Env): AiProvider {
 function groq(env: Env): AiProvider {
   const apiKey = env.GROQ_API_KEY;
   const models = tierModels(env, "GROQ", {
-    fast: "llama-3.1-8b-instant",
+    fast: "openai/gpt-oss-20b",
     balanced: "openai/gpt-oss-120b",
     strong: "openai/gpt-oss-120b",
   });
@@ -59,7 +59,8 @@ function groq(env: Env): AiProvider {
 function openrouter(env: Env): AiProvider {
   const apiKey = env.OPENROUTER_API_KEY;
   // Free models come and go, so a list is tried in order (OpenRouter routes to the next one if the first fails).
-  const freeModels = (env.OPENROUTER_FREE_MODELS || "openai/gpt-oss-120b:free,meta-llama/llama-3.3-70b-instruct:free")
+  // Checked 2026-10-13: free models that support structured (JSON schema) output.
+  const freeModels = (env.OPENROUTER_FREE_MODELS || "nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean);

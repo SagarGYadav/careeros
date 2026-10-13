@@ -26,7 +26,7 @@ session (local or cloud) can continue.
 ### Phase 0 — Local setup (you + Claude, no app code)
 - [x] Project folder outside OneDrive; git repo with `CLAUDE.md`, `docs/`, `.gitattributes` (LF line endings)
 - [x] GitHub: public repo `careeros` created and pushed (check: secret scanning + push protection on)
-- [x] Neon free account: project `careeros` with a `test` branch
+- [x] Neon free account: project `careeros` (tests use a separate `careeros_test` database)
 - [ ] Both Neon connection strings pasted into `.env` (never committed)
 - [ ] Optional, for cloud sessions later: Claude GitHub App on the repo + cloud environment (PROMPTS.md §5)
 
@@ -53,7 +53,7 @@ session (local or cloud) can continue.
 - [x] 2c CV pipeline: storage, text with pages, link annotations, regex extractors, section detection, ResumeParser
       (few-shot, PDF + text), verification (grounding, completeness with targeted second pass, deterministic overrides,
       date maths), evidence catalog
-- [ ] 2d Review and profile: side-by-side review (pdf.js), flags and source quotes, confirm → profile + Resume v1;
+- [x] 2d Review and profile: side-by-side review (pdf.js), flags and source quotes, confirm → profile + Resume v1;
       profile pages, preferences (locations, work modes, CTC, notice period, dealbreakers), Memory
 - [ ] 2e Evals: `npm run eval:resume` on all six fixtures with real Gemini; fix until the §9.4 targets are met
 - **Accept:** e2e with mock AI on every fixture; §9.4 targets met with real Gemini (numbers in Decisions).
@@ -129,6 +129,9 @@ Each Part 2 phase is split into steps when it starts.
 - Phase 1: no email verification or password reset (single-user app; add before opening sign-ups to others).
 - Phase 1: Better Auth skips rate limiting when it cannot determine a client IP (direct handler calls in tests); real HTTP requests are limited.
 - Phase 1: Overview shows only a welcome card until the CV and job phases add real content.
+- Phase 2: re-uploading a CV replaces the profile on confirm; the added/changed/removed merge diff (SPEC §9.1 step 6) is not built yet.
+- Phase 2: proficiency is the code rule only; the optional AI ±1 adjustment (SPEC §9.3) is not built. Skill years refresh on CV confirm, not on later experience edits.
+- Phase 2: scanned PDFs (no text layer) are rejected with a clear message; there is no OCR.
 
 ## Decisions
 _(date — decision — reason)_
@@ -156,3 +159,11 @@ _(date — decision — reason)_
 - 2026-10-09 — ParsedCv: entries (roles, projects, degrees, certifications) carry a `sourceQuote`; verbatim fields (names, bullets, skills) are their own quote and are located in the CV by the grounding check. Keeps AI output tokens down while every field can still show its source. The AI schema uses nullable instead of optional fields for structured-output compatibility across providers.
 - 2026-10-09 — Verification: grounding = normalised edit-distance window ≥ 0.9 (skills by skill key, so “NodeJS” = “Node.js”); regex/annotation e-mail, phone and links override the AI; completeness compares counts with the deterministic parse and retries only the short section (once, only when an AI answered), keeping the retry only if it has more grounded items.
 - 2026-10-09 — Integration tests set `AI_PROVIDERS=mock` in their setup, so a real key in `.env` can never be used by an automated test. Fixture `*.expected.json` now include bullet texts (for the bullet-capture metric).
+- 2026-10-13 — Review screen draws the original PDF in the browser with pdf.js from `unpdf` (already a dependency, loaded only on that page), with the selected field's source highlighted; DOCX files show the text that was read. No extra PDF viewer package.
+- 2026-10-13 — Confirm recomputes everything code owns (durations, totals, metric flags, evidence catalog) on the server and writes the profile, skills and default resume in one batch transaction. Profile edits keep bullet evidence ids stable; new bullets get the next free id, so later citations stay valid.
+- 2026-10-13 — Suggested skill level = rule in code: years used (overlaps merged), recency, breadth; work with a skill that implies another counts for it (Next.js → React, from SkillRelation); a skill only listed starts at 2. User changes are recorded in UserSkillHistory.
+- 2026-10-13 — CV upload is a route handler that streams NDJSON progress events (step-by-step progress UI); at most 20 uploads per user per hour to protect the free AI quota. Uploaded files are served back only to their owner, with `nosniff` and a sandbox CSP.
+- 2026-10-13 — Links styled as buttons are real links (`LinkButton`), not Base UI buttons rendered as anchors (those are announced as buttons). The sidebar's active state streams behind `<Suspense>` so pages with dynamic segments prerender under `cacheComponents`.
+- 2026-10-13 — AI model defaults updated after live checks with the user's free keys: Groq fast `openai/gpt-oss-20b` (`llama-3.1-8b-instant` retired); OpenRouter free `nvidia/nemotron-3-super-120b-a12b:free` then `google/gemma-4-31b-it:free` (`gpt-oss-120b` is no longer free). All three providers return valid structured output.
+- 2026-10-13 — The Neon `test` branch no longer exists; tests now use a separate `careeros_test` database on the same branch (data fully separate, one compute instead of two, so fewer free compute hours). Playwright's server and integration tests force `AI_PROVIDERS=mock`.
+- 2026-10-13 — `npm audit` (runtime): 4 high in Prisma's tooling (`mysql2`, `deepmerge-ts`, as before) and 3 moderate from `mammoth`'s command-line helper (`argparse` → `sprintf-js`), which the app never calls. No critical findings.

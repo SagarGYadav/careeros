@@ -24,6 +24,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env.DATABASE_URL_TEST ?? "",
       BETTER_AUTH_URL: baseURL,
+      // Automated tests never call real AI providers, whatever .env says.
+      AI_PROVIDERS: "mock",
     },
   },
 });

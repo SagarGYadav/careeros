@@ -58,7 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "You",
     items: [
-      { title: "Career profile", href: "/profile", icon: UserRound, enabled: false, keywords: ["cv", "skills"] },
+      { title: "Career profile", href: "/profile", icon: UserRound, enabled: true, keywords: ["cv", "skills"] },
       { title: "Settings", href: "/settings", icon: Settings, enabled: true, keywords: ["account", "theme"] },
     ],
   },

@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { FileQuestion } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 
 export default function NotFound() {
   return (
@@ -13,11 +12,7 @@ export default function NotFound() {
         icon={FileQuestion}
         title="Page not found"
         description="The page you're looking for doesn't exist or has moved."
-        action={
-          <Button nativeButton={false} render={<Link href="/overview" />}>
-            Go to Overview
-          </Button>
-        }
+        action={<LinkButton href="/overview">Go to Overview</LinkButton>}
       />
     </main>
   );

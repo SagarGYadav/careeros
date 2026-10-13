@@ -15,6 +15,9 @@ export type ExtractedCv = {
   links: CvLink[];
 };
 
+/** Joins pages when the text is stored; a form feed never occurs inside CV text. */
+export const PAGE_SEPARATOR = "\n\f\n";
+
 /** Fewer characters than this means a scanned image without a text layer. */
 export const MIN_TEXT_CHARS = 200;
 

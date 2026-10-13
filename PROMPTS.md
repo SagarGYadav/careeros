@@ -36,8 +36,9 @@ Already installed: Node 22, npm, Git.
 2. **GitHub:** public repo `careeros` (done; `main` is pushed). Optional GitHub CLI for opening PRs from the terminal:
    `winget install GitHub.cli`, then `gh auth login`. Without it, Claude pushes the branch and you open the PR on github.com.
 3. **Database — Neon free (recommended, nothing to install):** create a project `careeros` (Postgres 16 or newer;
-   pgvector is enabled by the first migration), then a branch named `test`. Put both connection strings in `.env`:
-   `DATABASE_URL` (main branch) and `DATABASE_URL_TEST` (test branch).
+   pgvector is enabled by the first migration). Tests use a second database, `careeros_test`, on the same branch
+   (`CREATE DATABASE careeros_test`; same connection string with the database name changed). Put both in `.env`:
+   `DATABASE_URL` (`neondb`) and `DATABASE_URL_TEST` (`careeros_test`).
    Alternative: install Docker Desktop and use `docker compose up -d` (Claude adds the compose file in step 1a).
 4. **`.env`:** copy `.env.example` (created in step 1a). Keep providers on `mock` until you add keys.
 5. **Free API keys, only when needed (no credit card for any of them):**

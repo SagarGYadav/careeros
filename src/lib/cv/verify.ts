@@ -115,6 +115,29 @@ function countSection(parsed: ParsedCv, kind: SectionKind): { entries: number; b
   }
 }
 
+/** Total experience (overlapping roles counted once), the same without internships, gaps and overlaps. */
+export function computeExperienceTotals(experience: CvDraft["experience"], now: Date): CvDraft["computed"] {
+  const intervals = experience
+    .filter((r) => r.startDate)
+    .map((r) => ({
+      start: r.startDate!,
+      end: r.isCurrent ? null : r.endDate,
+      label: `${r.title} at ${r.company}`,
+      internship: r.employmentType === "internship",
+    }));
+  const totals = experienceTotals(intervals, now);
+  const professional = experienceTotals(
+    intervals.filter((r) => !r.internship),
+    now,
+  );
+  return {
+    totalExperienceMonths: totals.totalMonths,
+    professionalExperienceMonths: professional.totalMonths,
+    gaps: totals.gaps,
+    overlaps: totals.overlaps,
+  };
+}
+
 export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
   const { extracted, now } = context;
   const index = groundingIndex(extracted.text);
@@ -433,29 +456,7 @@ export function verifyCv(parsed: ParsedCv, context: VerifyContext): VerifiedCv {
     pageOf: pageLocator(extracted.kind === "pdf" ? extracted.pages : []),
   });
 
-  // ---- Experience totals (code computes; overlapping roles count once).
-  const intervals = experience
-    .filter((r) => r.startDate)
-    .map((r) => ({
-      start: r.startDate!,
-      end: r.endDate,
-      label: `${r.title} at ${r.company}`,
-      internship: r.employmentType === "internship",
-    }));
-  const totals = experienceTotals(intervals, now);
-  const professional = experienceTotals(
-    intervals.filter((r) => !r.internship),
-    now,
-  );
-  const draft: CvDraft = {
-    ...draftWithoutTotals,
-    computed: {
-      totalExperienceMonths: totals.totalMonths,
-      professionalExperienceMonths: professional.totalMonths,
-      gaps: totals.gaps,
-      overlaps: totals.overlaps,
-    },
-  };
+  const draft: CvDraft = { ...draftWithoutTotals, computed: computeExperienceTotals(experience, now) };
 
   // ---- Completeness: every detected section has content, and counts are not below the text-based parse.
   const sectionChecks: SectionCheck[] = [];

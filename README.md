@@ -9,7 +9,7 @@ pages, read a recruiter-grade fit report for each job, track applications and le
 ## Local setup
 
 Requirements: Node.js 22+, a PostgreSQL 16+ database with pgvector (a free [Neon](https://neon.tech) project with a
-`test` branch, or `docker compose up -d`).
+separate `careeros_test` database for tests, or `docker compose up -d`).
 
 ```bash
 npm install                 # also generates the Prisma client

@@ -1,5 +1,6 @@
 import "server-only";
 import { analyseCv, type CvAnalysis, type CvParseFn } from "@/lib/cv/analyse";
+import { PAGE_SEPARATOR } from "@/lib/cv/extract-text";
 import { validateCvFile } from "@/lib/cv/files";
 import { AppError, isAppError } from "@/lib/errors";
 import { ai } from "@/server/ai/runner";
@@ -55,7 +56,8 @@ export async function processCvUpload(
       },
     );
     await saveResumeParse(userId, resume.id, {
-      extractedText: analysis.extracted.text,
+      // Pages are kept apart so evidence can still be located per page later.
+      extractedText: analysis.extracted.pages.join(PAGE_SEPARATOR),
       pageCount: kind === "pdf" ? analysis.extracted.pages.length : null,
       links: analysis.extracted.links,
       parsed: analysis.draft,

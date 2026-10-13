@@ -71,3 +71,49 @@ export async function listResumeVersions(userId: string) {
     },
   });
 }
+
+/** The confirmed CV the profile was built from. */
+export async function getDefaultResume(userId: string) {
+  return db.resumeVersion.findFirst({
+    where: { userId, isDefault: true, parseStatus: "confirmed" },
+    orderBy: { confirmedAt: "desc" },
+  });
+}
+
+export async function countResumeUploadsSince(userId: string, since: Date) {
+  return db.resumeVersion.count({ where: { userId, createdAt: { gte: since } } });
+}
+
+/** Statements that mark one version confirmed and default (for a batch transaction). */
+export function confirmResumeStatements(
+  userId: string,
+  resumeId: string,
+  parsed: unknown,
+  evidence: unknown,
+  now: Date,
+) {
+  return [
+    db.resumeVersion.updateMany({
+      where: { userId, isDefault: true, id: { not: resumeId } },
+      data: { isDefault: false },
+    }),
+    db.resumeVersion.updateMany({
+      where: { id: resumeId, userId },
+      data: {
+        parsed: json(parsed),
+        evidence: json(evidence),
+        parseStatus: "confirmed",
+        confirmedAt: now,
+        isDefault: true,
+      },
+    }),
+  ];
+}
+
+/** Keeps the default CV's draft and evidence catalog in step with profile edits (for a batch transaction). */
+export function updateResumeDraftStatement(userId: string, resumeId: string, parsed: unknown, evidence: unknown) {
+  return db.resumeVersion.updateMany({
+    where: { id: resumeId, userId },
+    data: { parsed: json(parsed), evidence: json(evidence) },
+  });
+}

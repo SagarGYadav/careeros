@@ -11,6 +11,7 @@ import "dotenv/config";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { buildAiProviders } from "@/lib/ai/providers";
 import { createAiRunner } from "@/lib/ai/runner";
+import { MemoryProviderStore } from "@/lib/providers/memory-store";
 import { analyseCv, type CvParseFn } from "@/lib/cv/analyse";
 import {
   EXTRACTION_TARGETS,
@@ -24,7 +25,6 @@ import {
 import { createResumeParser } from "@/server/ai/resume-parser";
 import { db } from "@/server/db";
 import { logAiRequest } from "@/server/repositories/ai-records";
-import { prismaProviderStore } from "@/server/repositories/provider-state";
 import { CV_FIXTURES } from "../fixtures/cv/personas";
 
 const MAX_ATTEMPTS = 4;
@@ -47,7 +47,9 @@ async function main() {
   // Only the chosen provider: a silent fallback to a backup would measure the wrong model.
   const runner = createAiRunner({
     getProviders: async () => ({ providers: [provider], disabled: new Set() }),
-    store: prismaProviderStore,
+    // Its own provider state: the eval measures the provider as it is now, and the app's day counters use UTC
+    // while Google resets at midnight Pacific time. The provider's own 429 still stops it when a quota is used up.
+    store: new MemoryProviderStore(),
     log: logAiRequest,
   });
   const parse: CvParseFn = createResumeParser(runner);

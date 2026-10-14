@@ -50,9 +50,7 @@ function renderBlock(block: Block): string {
       return `**tool_use** \`${String(block.name)}\` (id \`${String(block.id)}\`)\n${fence(JSON.stringify(block.input, null, 2), "json")}`;
     case "tool_result": {
       const content = block.content;
-      const body = Array.isArray(content)
-        ? (content as Block[]).map(renderBlock).join("\n\n")
-        : String(content ?? "");
+      const body = Array.isArray(content) ? (content as Block[]).map(renderBlock).join("\n\n") : String(content ?? "");
       const error = block.is_error ? " — **error**" : "";
       return `**tool_result** for \`${String(block.tool_use_id)}\`${error}\n${fence(body)}`;
     }

@@ -42,3 +42,6 @@ Thumbs.db
 
 # Downloaded models (transformers.js)
 /.cache/
+
+# request-logger output (full agent conversations)
+/request-logger/logs/

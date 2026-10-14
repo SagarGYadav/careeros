@@ -82,7 +82,8 @@ export type RequirementAssessment = {
   status: RequirementStatus;
   /** 0, 0.5 or 1 for skills; null when code can't judge it (FitAnalyst assesses those with CV evidence). */
   match: number | null;
-  via: "direct" | "implied" | "related" | null;
+  /** "semantic": FitAnalyst showed the skill in the CV under another name and code accepted it (AI inference). */
+  via: "direct" | "implied" | "related" | "semantic" | null;
   reason: string;
 };
 
@@ -347,18 +348,29 @@ export function recommend(total: number, blockers: number, config: ScoringConfig
   return "LOW_PRIORITY";
 }
 
+/** Skill assessment with accepted semantic matches applied: a skill code found missing counts half (SPEC §12.2). */
+function assessWithSemantic(req: FitRequirement, profile: FitProfile, semantic: ReadonlySet<string>) {
+  const assessed = assessSkill(req, profile);
+  if (assessed.status !== "missing" || !semantic.has(req.reqId)) return assessed;
+  return {
+    ...assessed,
+    status: "partial" as const,
+    match: 0.5,
+    via: "semantic" as const,
+    reason: "The report found it in your CV under another name (AI inference).",
+  };
+}
+
 export function scoreFit(
   requirements: FitRequirement[],
   job: FitJob,
   profile: FitProfile,
   config: ScoringConfigValues,
+  semanticMatches: ReadonlySet<string> = new Set(),
 ): FitScore {
-  const assessed = new Map(
-    requirements.map((req) => [
-      req.reqId,
-      req.kind === "skill" ? assessSkill(req, profile) : assessOther(req, profile),
-    ]),
-  );
+  const assess = (req: FitRequirement, p: FitProfile) =>
+    req.kind === "skill" ? assessWithSemantic(req, p, semanticMatches) : assessOther(req, p);
+  const assessed = new Map(requirements.map((req) => [req.reqId, assess(req, profile)]));
   const w = config.weights;
   const skills = skillsComponent(requirements, assessed, w.skills);
   const scaled = (part: { raw: number; reason: string; flagged: boolean }, key: Exclude<ComponentKey, "skills">) => ({
@@ -413,7 +425,7 @@ export function scoreFit(
       skills: new Map([...profile.skills, [req.skillId, { name, proficiency: 3, years: null }]]),
     };
     const relearned = new Map(
-      requirements.map((r) => [r.reqId, r.kind === "skill" ? assessSkill(r, learned) : assessed.get(r.reqId)!]),
+      requirements.map((r) => [r.reqId, r.kind === "skill" ? assess(r, learned) : assessed.get(r.reqId)!]),
     );
     const points = Math.round(skillsComponent(requirements, relearned, w.skills).points - skillPoints);
     if (points >= 1) gainsBySkill.set(req.skillId, { skillName: name, reqIds: [req.reqId], points });

@@ -7,7 +7,7 @@ import { db } from "@/server/db";
 export async function listSkillCatalogue(userId: string) {
   return db.skill.findMany({
     where: { ownerKey: { in: ["global", userId] } },
-    select: { id: true, slug: true, name: true, aliases: true, category: true, ownerKey: true },
+    select: { id: true, slug: true, name: true, aliases: true, category: true, ownerKey: true, learningEffort: true },
     orderBy: [{ ownerKey: "asc" }, { name: "asc" }],
   });
 }

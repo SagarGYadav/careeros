@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import { readConditions } from "@/lib/jobs/conditions";
 import type { RequirementImportance, RequirementKind } from "@/lib/jobs/extraction";
@@ -169,6 +170,8 @@ async function fitProfile(userId: string): Promise<FitProfile> {
   };
 }
 
+type AnalysisJob = NonNullable<Awaited<ReturnType<typeof getJobForAnalysis>>>;
+
 export type FitAnalysis = {
   id: string;
   jobId: string;
@@ -177,13 +180,27 @@ export type FitAnalysis = {
   scoringConfigVersion: number;
   requirements: FinalRequirement[];
   extractionMode: string;
+  /** Requirements FitAnalyst showed in the CV under another name, accepted by the validator. */
+  semanticMatches: string[];
+  job: AnalysisJob;
+  profile: FitProfile;
+  resume: Awaited<ReturnType<typeof getDefaultResume>>;
+  /** The stored report, if FitAnalyst has written one for these inputs. */
+  stored: { report: unknown; promptVersion: string | null; validation: unknown; model: string | null };
 };
+
+const storedSemanticSchema = z.object({ semanticMatches: z.array(z.string()) }).catch({ semanticMatches: [] });
 
 /**
  * Fit analysis of one job (SPEC §12.2, §12.5): extract requirements if needed, then score in code. The result is
  * saved per input hash, so the same job, profile and settings give the same stored analysis.
  */
-export async function analyseJobFit(userId: string, jobId: string, now = new Date()): Promise<FitAnalysis> {
+export async function analyseJobFit(
+  userId: string,
+  jobId: string,
+  now = new Date(),
+  options: { semanticMatches?: string[] } = {},
+): Promise<FitAnalysis> {
   const extracted = await extractJobRequirements(userId, jobId);
   const [job, profile, configRow, resume] = await Promise.all([
     getJobForAnalysis(userId, jobId),
@@ -215,7 +232,6 @@ export async function analyseJobFit(userId: string, jobId: string, now = new Dat
     salaryDisclosed: job.salaryDisclosed,
     conditions: readConditions(job.conditions),
   };
-  const score = scoreFit(requirements, fitJob, profile, config);
   const samples =
     job.roleFamilyId && job.locationCity
       ? await listSalarySamples(userId, {
@@ -247,20 +263,29 @@ export async function analyseJobFit(userId: string, jobId: string, now = new Dat
     .digest("hex")
     .slice(0, 32);
   const existing = await findJobAnalysis(userId, jobId, inputHash);
+  // Accepted semantic matches are part of the stored analysis (not of its input hash), so re-analysing keeps them.
+  const semanticMatches = options.semanticMatches ?? storedSemanticSchema.parse(existing?.breakdown).semanticMatches;
+  const score = scoreFit(requirements, fitJob, profile, config, new Set(semanticMatches));
   const saved =
-    existing ??
-    (await saveJobAnalysis(userId, {
-      jobId,
-      resumeVersionId: resume?.id ?? null,
-      scoringConfigVersion: config.version,
-      scoreTotal: score.total,
-      breakdown: { components: score.components, requirements: score.requirements, conditions: score.conditions },
-      recommendation: score.recommendation,
-      blockers: score.blockers,
-      gains: score.gains,
-      salaryContext: context,
-      inputHash,
-    }));
+    existing && !options.semanticMatches
+      ? existing
+      : await saveJobAnalysis(userId, {
+          jobId,
+          resumeVersionId: resume?.id ?? null,
+          scoringConfigVersion: config.version,
+          scoreTotal: score.total,
+          breakdown: {
+            components: score.components,
+            requirements: score.requirements,
+            conditions: score.conditions,
+            semanticMatches,
+          },
+          recommendation: score.recommendation,
+          blockers: score.blockers,
+          gains: score.gains,
+          salaryContext: context,
+          inputHash,
+        });
   return {
     id: saved.id,
     jobId,
@@ -269,5 +294,15 @@ export async function analyseJobFit(userId: string, jobId: string, now = new Dat
     scoringConfigVersion: config.version,
     requirements: extracted.requirements,
     extractionMode: extracted.mode,
+    semanticMatches,
+    job,
+    profile,
+    resume,
+    stored: {
+      report: saved.report,
+      promptVersion: saved.promptVersion,
+      validation: saved.validation,
+      model: saved.model,
+    },
   };
 }

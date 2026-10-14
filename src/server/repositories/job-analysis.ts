@@ -185,3 +185,20 @@ export async function listSalarySamples(
     select: { salaryMinAnnual: true, salaryMaxAnnual: true },
   });
 }
+
+/** Stores FitAnalyst's report on an analysis, with the validator's result and what produced it. */
+export async function saveFitReport(
+  userId: string,
+  analysisId: string,
+  data: { report: unknown; validation: unknown; model: string | null; promptVersion: string },
+) {
+  await db.jobAnalysis.updateMany({
+    where: { id: analysisId, userId },
+    data: {
+      report: json(data.report),
+      validation: json(data.validation),
+      model: data.model,
+      promptVersion: data.promptVersion,
+    },
+  });
+}

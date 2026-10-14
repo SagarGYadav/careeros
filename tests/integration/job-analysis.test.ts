@@ -7,6 +7,7 @@ import { db } from "@/server/db";
 import { savePreferences } from "@/server/repositories/profile";
 import { listTargetRoles, updateTargetRole } from "@/server/repositories/target-roles";
 import { processCvUpload } from "@/server/services/cv-pipeline";
+import { generateFitReport } from "@/server/services/fit-report";
 import { analyseJobFit } from "@/server/services/job-analysis";
 import { confirmResume } from "@/server/services/profile";
 import { getScoringSettings, resetScoringSettings, saveScoringSettings } from "@/server/services/scoring-settings";
@@ -157,4 +158,28 @@ describe("Fit analysis", () => {
     const analysis = await analyseJobFit(userId, jobId, NOW);
     expect(analysis.requirements.find((r) => r.text === "Redux")).toMatchObject({ importance: "preferred" });
   }, 120_000);
+  it("writes the Fit Report, validates it, stores it and reuses it", async () => {
+    const stages: string[] = [];
+    const view = await generateFitReport(userId, jobId, { now: NOW, onStage: (stage) => stages.push(stage) });
+    expect(stages).toEqual(["requirements", "evidence", "writing", "saving"]);
+    expect(view.cached).toBe(false);
+    // The mock AI writes the report from code data; it must pass every validator check.
+    expect(view.validation).toMatchObject({ passed: true, issues: [], repaired: false });
+    expect(view.report.mode).toBe("ai");
+    const required = view.analysis.requirements.filter((r) => r.importance === "required").map((r) => r.reqId);
+    expect(view.report.requirements.map((r) => r.reqId)).toEqual(expect.arrayContaining(required));
+    expect(view.report.strategy.action).toMatch(/seek_referral|skip/); // LOW_PRIORITY
+    expect(view.report.ats.present.map((k) => k.keyword)).toEqual(expect.arrayContaining(["React", "TypeScript"]));
+    expect(view.report.ats.missing.map((k) => k.keyword)).toEqual(expect.arrayContaining(["Kubernetes", "Terraform"]));
+    expect(view.report.risks.find((r) => r.mitigation === "learn")?.effort).toMatch(/small|medium|large/);
+    expect(view.report.confidence.level).toBe("medium"); // a short posting
+
+    const saved = await db.jobAnalysis.findUniqueOrThrow({ where: { id: view.analysis.id } });
+    expect(saved).toMatchObject({ promptVersion: "1", model: "careeros-mock" });
+    expect(saved.report).not.toBeNull();
+
+    const again = await generateFitReport(userId, jobId, { now: NOW });
+    expect(again.cached).toBe(true);
+    expect(again.report.summary).toEqual(view.report.summary);
+  }, 180_000);
 });

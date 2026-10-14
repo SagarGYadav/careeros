@@ -77,7 +77,15 @@ async function cvSkillRows(userId: string, draft: CvDraft, now: Date) {
     let skill = matchSkill(index, candidate.name);
     if (!skill) {
       const slug = skillSlug(candidate.name);
-      skill = { id: randomUUID(), slug, name: candidate.name, aliases: [], category: "other", ownerKey: userId };
+      skill = {
+        id: randomUUID(),
+        slug,
+        name: candidate.name,
+        aliases: [],
+        category: "other",
+        ownerKey: userId,
+        learningEffort: 2,
+      };
       newSkills.push({ id: skill.id, slug, name: candidate.name });
       index.set(skillKey(candidate.name), skill);
     }

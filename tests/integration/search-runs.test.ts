@@ -96,6 +96,17 @@ describe("search runs", () => {
     expect(jobs.every((j) => j.quickScore !== null)).toBe(true);
     expect((await getProfileEmbeddingInfo(userId))?.model).toBe(MOCK_EMBEDDING_MODEL);
 
+    // Fit Reports were written for the run's top new matches that fit (at most 5 by default).
+    expect(done.analyseTotal).toBeGreaterThan(0);
+    expect(done.analyseTotal).toBeLessThanOrEqual(5);
+    expect(done.analysed).toBe(done.analyseTotal);
+    const analysed = await db.job.findMany({ where: { userId, fitScore: { not: null } } });
+    expect(analysed).toHaveLength(done.analyseTotal);
+    expect(analysed.every((j) => j.sortScore === j.fitScore && j.notFitReasons.length === 0)).toBe(true);
+    expect(await db.jobAnalysis.count({ where: { userId, report: { not: { equals: null } } } })).toBe(
+      done.analyseTotal,
+    );
+
     const overview = await getSearchOverview(userId);
     expect(overview.activeRunId).toBeNull();
     expect(overview.matches.length).toBeGreaterThan(0);
@@ -117,7 +128,8 @@ describe("search runs", () => {
     const first = await feed();
     expect(first.hasJobs).toBe(true);
     expect(first.cards.length).toBeGreaterThan(0);
-    const scores = first.cards.map((c) => c.score ?? -1);
+    // Sorted by Fit score where there is one, else by relevance.
+    const scores = first.cards.map((c) => c.fitScore ?? c.score ?? -1);
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
     expect(first.cards.every((c) => c.notFitReasons.length === 0 && !c.staffing && !c.stale)).toBe(true);
     expect(first.cards[0].reasons.length).toBeGreaterThan(0);

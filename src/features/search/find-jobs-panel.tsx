@@ -19,7 +19,7 @@ async function post(url: string): Promise<RunProgress> {
 
 function steps(p: RunProgress): ProgressStep[] {
   const searching = p.stage === "search";
-  const order = ["search", "embed", "rank", "done"];
+  const order = ["search", "embed", "rank", "analyse", "done"];
   const at = order.indexOf(p.stage);
   const status = (index: number) =>
     p.status === "failed" && index === at ? "error" : at > index ? "done" : at === index ? "running" : "pending";
@@ -47,6 +47,17 @@ function steps(p: RunProgress): ProgressStep[] {
       label: "Rank by relevance",
       status: status(2),
       detail: p.rankTotal ? `${Math.min(p.ranked, p.rankTotal)} of ${p.rankTotal} jobs` : undefined,
+    },
+    {
+      id: "analyse",
+      label: "Write Fit Reports for the top new matches",
+      status: status(3),
+      detail:
+        at >= 3
+          ? p.analyseTotal
+            ? `${Math.min(p.analysed, p.analyseTotal)} of ${p.analyseTotal} reports`
+            : "No new matches to analyse"
+          : undefined,
     },
   ];
 }

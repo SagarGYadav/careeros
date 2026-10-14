@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { TrustBadge } from "@/components/trust-badge";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +100,11 @@ export function TopMatches({ matches, runFinishedAt }: { matches: MatchView[]; r
         {matches.map((job) => (
           <li key={job.id} className="flex flex-wrap items-start gap-3 p-3">
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="font-medium">{job.title}</p>
+              <p className="font-medium">
+                <Link href={`/jobs/${job.id}`} className="hover:underline">
+                  {job.title}
+                </Link>
+              </p>
               <p className="text-sm text-muted-foreground">
                 {job.companyName}
                 {job.city && ` · ${job.city.replace("Remote-India", "Remote")}`}

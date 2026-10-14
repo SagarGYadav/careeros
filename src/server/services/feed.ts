@@ -43,6 +43,9 @@ export type FeedCard = {
   companyBlocked: boolean;
   stale: boolean;
   score: number | null;
+  /** Fit score and recommendation once analysed; the card then shows these instead of relevance. */
+  fitScore: number | null;
+  fitRecommendation: "APPLY" | "CONSIDER" | "LOW_PRIORITY" | null;
   parts: ScorePart[];
   adjustments: { points: number; reason: string }[];
   reasons: string[];
@@ -94,6 +97,8 @@ export async function getFeed(userId: string, query: FeedQuery, now = new Date()
       companyBlocked: job.company?.isBlocked ?? false,
       stale: job.isStale,
       score: job.quickScore,
+      fitScore: job.fitScore,
+      fitRecommendation: job.fitRecommendation as FeedCard["fitRecommendation"],
       parts,
       adjustments,
       reasons: topReasons(parts),

@@ -2,6 +2,7 @@ import {
   Brain,
   Briefcase,
   Building2,
+  FilePlus,
   FileText,
   LayoutDashboard,
   Library,
@@ -38,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "For you", href: "/jobs", icon: Briefcase, enabled: true, keywords: ["feed", "matches"] },
       { title: "Target roles", href: "/jobs/roles", icon: Target, enabled: true, keywords: ["roles", "suggest"] },
       { title: "Company sites", href: "/jobs/company-sites", icon: Building2, enabled: false },
+      { title: "Add job", href: "/jobs/new", icon: FilePlus, enabled: true, keywords: ["paste", "url", "manual"] },
     ],
   },
   {
@@ -74,4 +76,10 @@ export function visibleNavGroups(groups: NavGroup[] = NAV_GROUPS): NavGroup[] {
 /** True when `pathname` is the item's page or one of its sub-pages. */
 export function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** The one nav item to highlight: the most specific href that matches ("/jobs/roles" beats "/jobs"). */
+export function activeNavHref(pathname: string, hrefs: string[]): string | null {
+  const matching = hrefs.filter((href) => isNavItemActive(pathname, href));
+  return matching.sort((a, b) => b.length - a.length)[0] ?? null;
 }

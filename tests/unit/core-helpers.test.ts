@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNavItemActive, NAV_GROUPS, visibleNavGroups } from "@/config/navigation";
+import { activeNavHref, isNavItemActive, NAV_GROUPS, visibleNavGroups } from "@/config/navigation";
 import { AppError, describeError, isAppError } from "@/lib/errors";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { confidenceLevel } from "@/lib/stats/confidence";
@@ -56,6 +56,10 @@ describe("navigation", () => {
     expect(isNavItemActive("/jobs", "/jobs")).toBe(true);
     expect(isNavItemActive("/jobs/roles", "/jobs")).toBe(true);
     expect(isNavItemActive("/jobsearch", "/jobs")).toBe(false);
+    const hrefs = ["/jobs", "/jobs/roles", "/jobs/new"];
+    expect(activeNavHref("/jobs/roles", hrefs)).toBe("/jobs/roles");
+    expect(activeNavHref("/jobs/abc123", hrefs)).toBe("/jobs");
+    expect(activeNavHref("/settings", hrefs)).toBeNull();
   });
 });
 

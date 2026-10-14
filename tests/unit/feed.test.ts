@@ -32,6 +32,7 @@ describe("feed URL filters", () => {
         postedWithinDays: 7,
         provider: "adzuna",
         directOnly: true,
+        analysedOnly: false,
         salaryMinAnnual: 2_000_000,
       },
     });

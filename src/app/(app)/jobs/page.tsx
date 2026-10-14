@@ -86,6 +86,7 @@ async function Feed({ searchParams }: { searchParams: Promise<SearchParams> }) {
     posted: first(params.posted),
     source: first(params.source),
     direct: first(params.direct) === "1",
+    analysed: first(params.analysed) === "1",
     salary: first(params.salary),
   };
   const shown: FeedGroup[] = ["for_you", "saved"];

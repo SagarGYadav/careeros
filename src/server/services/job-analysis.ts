@@ -51,6 +51,8 @@ export async function extractJobRequirements(userId: string, jobId: string): Pro
   if (!job) throw new AppError("NOT_FOUND");
   if (
     job.extractedAt &&
+    // A reading made without AI is tried again with AI next time.
+    job.extractionMode !== "no_ai" &&
     job.extractionPromptVersion === JOB_EXTRACTOR_PROMPT_VERSION &&
     job.extractionSourceHash === job.descriptionHash
   ) {

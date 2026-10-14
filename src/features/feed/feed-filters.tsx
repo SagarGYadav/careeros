@@ -20,6 +20,7 @@ export type FeedFilterValues = {
   posted: string;
   source: string;
   direct: boolean;
+  analysed: boolean;
   salary: string;
 };
 
@@ -77,6 +78,7 @@ export function FeedFilters({
       if (merged[key]) params.set(key, merged[key]);
     }
     if (merged.direct) params.set("direct", "1");
+    if (merged.analysed) params.set("analysed", "1");
     const query = params.toString();
     startTransition(() => router.push(query ? `/jobs?${query}` : "/jobs"));
   }
@@ -133,11 +135,22 @@ export function FeedFilters({
         />
         Direct from company
       </label>
+      <label className="flex h-8 items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="size-4 accent-primary"
+          checked={values.analysed}
+          onChange={(e) => apply({ analysed: e.target.checked })}
+        />
+        Analysed only
+      </label>
       {active && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => apply({ role: "", city: "", mode: "", posted: "", source: "", salary: "", direct: false })}
+          onClick={() =>
+            apply({ role: "", city: "", mode: "", posted: "", source: "", salary: "", direct: false, analysed: false })
+          }
         >
           Clear filters
         </Button>

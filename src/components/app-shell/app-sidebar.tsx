@@ -17,7 +17,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { isNavItemActive, visibleNavGroups } from "@/config/navigation";
+import { activeNavHref, visibleNavGroups } from "@/config/navigation";
 
 /** Sidebar navigation. `userMenu` is rendered by the server (it reads the session) and passed in as a slot. */
 export function AppSidebar({ userMenu }: { userMenu: React.ReactNode }) {
@@ -51,9 +51,16 @@ function ActiveNavGroups() {
 }
 
 function NavGroups({ pathname }: { pathname: string | null }) {
+  const groups = visibleNavGroups();
+  const active = pathname
+    ? activeNavHref(
+        pathname,
+        groups.flatMap((g) => g.items.map((i) => i.href)),
+      )
+    : null;
   return (
     <>
-      {visibleNavGroups().map((group, index) => (
+      {groups.map((group, index) => (
         <SidebarGroup key={group.label ?? index}>
           {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
           <SidebarGroupContent>
@@ -61,7 +68,7 @@ function NavGroups({ pathname }: { pathname: string | null }) {
               {group.items.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
-                    isActive={pathname ? isNavItemActive(pathname, item.href) : false}
+                    isActive={item.href === active}
                     tooltip={item.title}
                     render={<Link href={item.href} />}
                   >

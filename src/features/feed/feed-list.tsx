@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Undo2,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatRelative } from "@/lib/format";
+import { RECOMMENDATION_LABELS } from "@/lib/fit-report/plain-text";
 import { DISMISS_REASONS, type DismissReason, type FeedGroup } from "@/lib/jobs/feed";
 import type { FeedCard } from "@/server/services/feed";
 import {
@@ -37,6 +39,8 @@ import {
 import { Relevance } from "@/features/search/top-matches";
 
 type Result = { ok: true } | { ok: false; message: string };
+
+const FIT_VARIANT = { APPLY: "success", CONSIDER: "warning", LOW_PRIORITY: "outline" } as const;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -192,7 +196,9 @@ export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-0.5">
                     <h3 className="flex flex-wrap items-center gap-2 font-medium">
-                      {job.title}
+                      <Link href={`/jobs/${job.id}`} className="hover:underline">
+                        {job.title}
+                      </Link>
                       {newAtOpen.has(job.id) && <Badge variant="brand">New</Badge>}
                     </h3>
                     <p className="text-sm text-muted-foreground">
@@ -202,7 +208,22 @@ export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup
                       {job.salary && ` · ${job.salary}`}
                     </p>
                   </div>
-                  <Relevance score={job.score} parts={job.parts} adjustments={job.adjustments} />
+                  {job.fitScore !== null && job.fitRecommendation ? (
+                    <Link
+                      href={`/jobs/${job.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-md text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      <Badge variant={FIT_VARIANT[job.fitRecommendation]}>
+                        <span className="tabular-nums">Fit {job.fitScore}</span>
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {RECOMMENDATION_LABELS[job.fitRecommendation]}
+                      </span>
+                      <span className="sr-only">: Fit Report for {name}</span>
+                    </Link>
+                  ) : (
+                    <Relevance score={job.score} parts={job.parts} adjustments={job.adjustments} />
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">

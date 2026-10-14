@@ -15,6 +15,7 @@ import { jobSearch } from "@/server/jobsearch/runner";
 import {
   countJobs,
   dismissalStats,
+  jobsToAnalyse,
   jobsForRoleStats,
   createJobs,
   findDedupeCandidates,
@@ -37,6 +38,7 @@ import {
 import { formatSalaryRange } from "@/lib/format";
 import { listSkillCatalogue, listSkillImplicationIds, listUserSkills } from "@/server/repositories/skills";
 import { listTargetRoles, saveRoleMarketStats } from "@/server/repositories/target-roles";
+import { generateFitReport } from "./fit-report";
 import {
   getProfileEmbeddingInfo,
   jobSimilarities,
@@ -60,15 +62,23 @@ const COUNTRY_NAMES: Record<string, string> = { in: "India" };
 const STEP_BUDGET_MS = 15_000;
 const EMBED_PAGE = 48;
 const RANK_PAGE = 200;
+/**
+ * Fit Reports written automatically per run (SPEC §10.4). The spec suggests 15; the default is 5 because each
+ * report uses two or three AI requests and Gemini Flash's free tier allows about 20 a day. The rest: "Analyse".
+ */
+const ANALYSE_TOP_N = () => num(process.env.JOB_DEEP_ANALYSIS_TOP_N, 5);
 
 const stateSchema = z.object({
-  stage: z.enum(["search", "embed", "rank", "done"]),
+  stage: z.enum(["search", "embed", "rank", "analyse", "done"]),
   queryIndex: z.number().int(),
   embedded: z.number().int(),
   embeddingsDeferred: z.boolean(),
   rankAfter: z.string().nullable(),
   ranked: z.number().int(),
   rankTotal: z.number().int(),
+  // Added with Fit Reports; runs saved before have none.
+  analyseQueue: z.array(z.string()).default([]),
+  analysed: z.number().int().default(0),
 });
 type RunState = z.infer<typeof stateSchema>;
 const planSchema = z.object({
@@ -90,6 +100,9 @@ export type RunProgress = {
   embeddingsDeferred: boolean;
   ranked: number;
   rankTotal: number;
+  /** Fit Reports written for the run's top new matches, of how many. */
+  analysed: number;
+  analyseTotal: number;
   errors: string[];
 };
 
@@ -111,6 +124,8 @@ function progressOf(run: RunRow): RunProgress {
     embeddingsDeferred: state.embeddingsDeferred,
     ranked: state.ranked,
     rankTotal: state.rankTotal,
+    analysed: state.analysed,
+    analyseTotal: state.analyseQueue.length,
     errors: z
       .array(z.object({ message: z.string() }))
       .catch([])
@@ -148,6 +163,8 @@ export async function startSearchRun(userId: string): Promise<RunProgress> {
     rankAfter: null,
     ranked: 0,
     rankTotal: 0,
+    analyseQueue: [],
+    analysed: 0,
   };
   const run = await createSearchRun(userId, {
     targetRoleIds: selected.map((r) => r.id),
@@ -411,6 +428,16 @@ async function scorePage(
 }
 
 /** Re-ranks every saved job now (after dismissals that change ranking or a profile change). */
+/** Ranks particular jobs now (one the user added, or one whose description changed). */
+export async function scoreJobsNow(userId: string, ids: string[]) {
+  if (!ids.length) return 0;
+  const [ranking, page] = await Promise.all([
+    rankingContext(userId),
+    listJobsForRanking(userId, null, ids.length, ids),
+  ]);
+  return scorePage(userId, ranking, page);
+}
+
 export async function rescoreAllJobs(userId: string, maxJobs = 2000) {
   const ranking = await rankingContext(userId);
   let after: string | null = null;
@@ -475,6 +502,7 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
   const timeLeft = () => Date.now() - started < STEP_BUDGET_MS;
   const note = (message: string) => errors.push({ at: new Date().toISOString(), message });
   let ranking: RankingContext | null = null;
+  let reportsThisCall = 0;
 
   try {
     while (timeLeft() && state.stage !== "done") {
@@ -574,12 +602,36 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
         const page = await listJobsForRanking(userId, state.rankAfter, RANK_PAGE);
         if (!page.length) {
           await refreshRoleMarketStats(userId);
-          state.stage = "done";
+          state.analyseQueue = (await jobsToAnalyse(userId, runId, ANALYSE_TOP_N())).map((j) => j.id);
+          state.stage = "analyse";
           continue;
         }
         await scorePage(userId, ranking, page);
         state.rankAfter = page.at(-1)!.id;
         state.ranked += page.length;
+        continue;
+      }
+
+      if (state.stage === "analyse") {
+        const jobId = state.analyseQueue[state.analysed];
+        // One report per call: a report can take most of a call's time with a real model.
+        if (!jobId || reportsThisCall > 0) {
+          if (!jobId) state.stage = "done";
+          break;
+        }
+        reportsThisCall++;
+        try {
+          await generateFitReport(userId, jobId, { now });
+        } catch (error) {
+          if (isAppError(error) && (error.code === "AI_RATE_LIMITED" || error.code === "AI_NOT_CONFIGURED")) {
+            note("Fit Reports paused: the free AI allowance is used up for now. Open a job to analyse it later.");
+            state.stage = "done";
+            continue;
+          }
+          note("A Fit Report couldn't be written for one job; open it to try again.");
+          if (!isAppError(error)) console.error("fit report failed", error);
+        }
+        state.analysed++;
         continue;
       }
     }

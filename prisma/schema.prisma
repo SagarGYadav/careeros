@@ -629,6 +629,11 @@ model Job {
   /// Relevance (SPEC §10.5), 0–100, and its parts with reasons.
   quickScore              Int?
   scoreParts              Json?
+  /// Fit score of the latest analysis (SPEC §12.2) and its recommendation; null until analysed.
+  fitScore                Int?
+  fitRecommendation       String?
+  /// What the feed sorts by: the Fit score when there is one, else relevance (SPEC §10.6).
+  sortScore               Int?
   searchRunId             String?
   /// { noticePeriodMaxDays, immediateJoiner, bond, shift, contractToHire, wfoDaysPerWeek } found by regex
   conditions              Json?
@@ -657,6 +662,7 @@ model Job {
 
   @@unique([userId, provider, externalId])
   @@index([userId, feedStatus, quickScore])
+  @@index([userId, feedStatus, sortScore])
   @@index([userId, descriptionHash])
   @@index([userId, companyId])
   @@map("jobs")

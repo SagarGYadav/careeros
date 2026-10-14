@@ -28,6 +28,8 @@ export default defineConfig({
       AI_PROVIDERS: "mock",
       JOB_SEARCH_PROVIDERS: "mock",
       EMBEDDING_PROVIDERS: "mock",
+      // Two automatic Fit Reports per run keep the Find jobs test quick.
+      JOB_DEEP_ANALYSIS_TOP_N: "2",
     },
   },
 });

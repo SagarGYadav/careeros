@@ -90,9 +90,9 @@ export async function runBatch(statements: Prisma.PrismaPromise<unknown>[]) {
 }
 
 /** Jobs to rank, in pages. */
-export async function listJobsForRanking(userId: string, afterId: string | null, take: number) {
+export async function listJobsForRanking(userId: string, afterId: string | null, take: number, ids?: string[]) {
   return db.job.findMany({
-    where: { userId, ...(afterId && { id: { gt: afterId } }) },
+    where: { userId, ...(afterId && { id: { gt: afterId } }), ...(ids && { id: { in: ids } }) },
     orderBy: { id: "asc" },
     take,
     select: {
@@ -129,7 +129,9 @@ export async function saveScores(
   );
   await db.$executeRaw`
     UPDATE jobs AS j
-    SET "quickScore" = v.score, "scoreParts" = v.parts, "notFitReasons" = v.reasons, "updatedAt" = now()
+    SET "quickScore" = v.score, "scoreParts" = v.parts, "notFitReasons" = v.reasons,
+        -- An analysed job keeps sorting by its Fit score.
+        "sortScore" = COALESCE(j."fitScore", v.score), "updatedAt" = now()
     FROM (VALUES ${Prisma.join(values)}) AS v(id, score, parts, reasons)
     WHERE j.id = v.id AND j."userId" = ${userId}`;
 }
@@ -231,6 +233,7 @@ function feedWhere(userId: string, filters: FeedFilters, now: Date): Prisma.JobW
   }
   if (filters.provider) and.push({ provider: filters.provider });
   if (filters.directOnly) and.push({ isDirectFromCompany: true });
+  if (filters.analysedOnly) and.push({ fitScore: { not: null } });
   if (filters.salaryMinAnnual) and.push({ salaryDisclosed: true, salaryMaxAnnual: { gte: filters.salaryMinAnnual } });
   return { userId, AND: and };
 }
@@ -243,7 +246,7 @@ export async function listFeed(userId: string, filters: FeedFilters, page: numbe
     db.job.findMany({
       where,
       orderBy: [
-        { quickScore: { sort: "desc", nulls: "last" } },
+        { sortScore: { sort: "desc", nulls: "last" } },
         { postedAt: { sort: "desc", nulls: "last" } },
         { id: "asc" },
       ],
@@ -268,6 +271,8 @@ export async function listFeed(userId: string, filters: FeedFilters, page: numbe
         applyLinks: true,
         quickScore: true,
         scoreParts: true,
+        fitScore: true,
+        fitRecommendation: true,
         notFitReasons: true,
         feedStatus: true,
         dismissReason: true,
@@ -315,4 +320,96 @@ export async function setFeedStatus(
 export async function setCompanyBlocked(userId: string, companyId: string, blocked: boolean) {
   const { count } = await db.company.updateMany({ where: { id: companyId, userId }, data: { isBlocked: blocked } });
   return count === 1;
+}
+
+/** A job's description and apply links, for replacing a cut-off description. */
+export async function getJobDescription(userId: string, jobId: string) {
+  return db.job.findFirst({
+    where: { id: jobId, userId },
+    select: { id: true, descriptionRaw: true, descriptionTruncated: true, applyLinks: true, title: true },
+  });
+}
+
+/**
+ * Replaces a job's description (pasted or read from its page). The extraction and Fit analysis follow the new
+ * description hash; the vector is cleared so the job is embedded again.
+ */
+export async function updateJobDescription(
+  userId: string,
+  jobId: string,
+  data: {
+    descriptionRaw: string;
+    descriptionHash: string;
+    conditions: unknown;
+    expMinYears: number | null;
+    expMaxYears: number | null;
+  },
+) {
+  const { count } = await db.job.updateMany({
+    where: { id: jobId, userId },
+    data: {
+      descriptionRaw: data.descriptionRaw,
+      descriptionHash: data.descriptionHash,
+      descriptionTruncated: false,
+      conditions: json(data.conditions),
+      expMinYears: data.expMinYears,
+      expMaxYears: data.expMaxYears,
+      embeddingModel: null,
+      embeddedAt: null,
+    },
+  });
+  return count === 1;
+}
+
+export async function createJob(userId: string, row: NewJobRow) {
+  return db.job.create({ data: { ...row, userId }, select: { id: true } });
+}
+
+/** One job for its page. */
+export async function getJobDetail(userId: string, jobId: string) {
+  return db.job.findFirst({
+    where: { id: jobId, userId },
+    select: {
+      id: true,
+      title: true,
+      companyName: true,
+      companyId: true,
+      location: true,
+      locationCity: true,
+      workMode: true,
+      employmentType: true,
+      salaryMinAnnual: true,
+      salaryMaxAnnual: true,
+      salaryDisclosed: true,
+      provider: true,
+      origin: true,
+      postedVia: true,
+      postedAt: true,
+      discoveredAt: true,
+      applyLinks: true,
+      descriptionRaw: true,
+      descriptionTruncated: true,
+      isDirectFromCompany: true,
+      isStale: true,
+      quickScore: true,
+      scoreParts: true,
+      fitScore: true,
+      fitRecommendation: true,
+      notFitReasons: true,
+      feedStatus: true,
+      injectionSuspected: true,
+      company: { select: { isStaffingAgency: true, isBlocked: true } },
+    },
+  });
+}
+
+/** The run's best new matches without a Fit Report yet, for automatic analysis. */
+export async function jobsToAnalyse(userId: string, runId: string, take: number) {
+  if (take <= 0) return [];
+  return db.job.findMany({
+    where: { userId, searchRunId: runId, notFitReasons: { isEmpty: true }, isStale: false, fitScore: null },
+    orderBy: [{ quickScore: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+    take,
+    select: { id: true },
+  });
 }

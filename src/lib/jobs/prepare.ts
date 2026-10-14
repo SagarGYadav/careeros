@@ -16,7 +16,7 @@ import { parseSalary } from "./salary";
 export const STALE_AFTER_DAYS = 30;
 
 export type PreparedJob = {
-  provider: NormalizedJob["provider"];
+  provider: NormalizedJob["provider"] | "manual";
   externalId: string;
   title: string;
   companyName: string;
@@ -51,7 +51,10 @@ function salaryLine(description: string): string | null {
   return m ? m[1].replace(/\.\s*$/, "") : null;
 }
 
-export function prepareJob(job: NormalizedJob, now: Date): PreparedJob {
+/** A job the user added (paste, URL or form) goes through the same cleaning as a search result. */
+export type IncomingJob = Omit<NormalizedJob, "provider"> & { provider: NormalizedJob["provider"] | "manual" };
+
+export function prepareJob(job: IncomingJob, now: Date): PreparedJob {
   const company = displayCompanyName(job.company);
   const city = canonicalCity(job.location) ?? (job.workModeHint === "remote" ? "Remote-India" : null);
   const text = `${job.title}\n${job.description}`;

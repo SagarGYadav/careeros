@@ -297,4 +297,66 @@ test.describe("signed in", () => {
     await expect(page.getByText("Using the default settings.")).toBeVisible();
     await expect(page.getByLabel("Skills", { exact: true })).toHaveValue("45");
   });
+  test("a job added by paste gets a Fit Report with every section, and the feed shows Fit scores", async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(180_000);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    // The search earlier wrote automatic reports for its top matches.
+    await page.goto("/jobs");
+    await expect(page.getByRole("link", { name: /^Fit \d+/ }).first()).toBeVisible();
+
+    await page.getByRole("link", { name: "Add job", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Add job" })).toBeVisible();
+    await page.getByLabel("Job page link").fill("https://www.linkedin.com/jobs/view/1");
+    await page.getByRole("button", { name: "Read job" }).click();
+    await expect(page.getByText(/doesn't read LinkedIn or Naukri/)).toBeVisible();
+
+    await page.getByLabel("Job title", { exact: true }).fill("Frontend Platform Engineer");
+    await page.getByLabel("Company", { exact: true }).fill("Lumen Ledger");
+    await page.getByLabel("Location", { exact: true }).fill("Bengaluru");
+    await page
+      .getByLabel("Job description", { exact: true })
+      .fill(
+        [
+          "What you'll do:",
+          "- Build the merchant dashboard in React and Next.js",
+          "- Own performance and accessibility of the checkout flow",
+          "Requirements:",
+          "- 3+ years of frontend experience",
+          "- Strong TypeScript and React",
+          "- Experience with REST APIs and GraphQL",
+          "- Bachelor's degree in Computer Science or equivalent",
+          "Good to have:",
+          "- Playwright",
+        ].join("\n"),
+      );
+    await page.getByRole("button", { name: "Save job" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Frontend Platform Engineer" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Analyse fit" }).click();
+    await expect(page.getByRole("heading", { name: /^Verdict/ })).toBeVisible({ timeout: 120_000 });
+    for (const section of [
+      /^Role decoded/,
+      /^Requirement by requirement/,
+      /^Experience relevance/,
+      /^Score breakdown and gains/,
+      /^Conditions and logistics/,
+      /^Recruiter's 30-second view/,
+      /^ATS keyword check/,
+      /^Risks and how to address them/,
+      /^Application strategy/,
+    ]) {
+      await expect(page.getByRole("heading", { level: 2, name: section })).toBeVisible();
+    }
+    await expect(page.getByText("/ 100 Fit score")).toBeVisible();
+    await page.getByRole("button", { name: "Copy report" }).click();
+    await expect(page.getByText("Report copied.")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+      "Fit Report: Frontend Platform Engineer",
+    );
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "fit-report");
+  });
 });

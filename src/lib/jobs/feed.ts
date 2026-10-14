@@ -42,6 +42,8 @@ export type FeedFilters = {
   postedWithinDays?: number;
   provider?: string;
   directOnly?: boolean;
+  /** Only jobs with a Fit Report. */
+  analysedOnly?: boolean;
   /** Annual INR; a job matches when its disclosed range reaches it. */
   salaryMinAnnual?: number;
 };
@@ -64,6 +66,7 @@ const feedQuerySchema = z.object({
     .catch(undefined),
   source: optionalText,
   direct: z.preprocess(first, z.literal("1").optional()).catch(undefined),
+  analysed: z.preprocess(first, z.literal("1").optional()).catch(undefined),
   /** Lakhs per annum, as the user thinks about salary. */
   salary: z.preprocess(first, z.coerce.number().int().min(1).max(500).optional()).catch(undefined),
   page: z.preprocess(first, z.coerce.number().int().min(1).max(1000)).catch(1),
@@ -83,6 +86,7 @@ export function parseFeedQuery(searchParams: Record<string, unknown>): FeedQuery
       postedWithinDays: q.posted,
       provider: q.source,
       directOnly: q.direct === "1",
+      analysedOnly: q.analysed === "1",
       salaryMinAnnual: q.salary ? q.salary * 100_000 : undefined,
     },
   };
@@ -97,6 +101,7 @@ export function hasActiveFilters(filters: FeedFilters): boolean {
     filters.postedWithinDays ||
     filters.provider ||
     filters.directOnly ||
+    filters.analysedOnly ||
     filters.salaryMinAnnual,
   );
 }

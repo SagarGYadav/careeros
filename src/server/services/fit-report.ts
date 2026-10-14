@@ -3,7 +3,7 @@ import { z } from "zod";
 import { evidenceItemSchema } from "@/lib/cv/schema";
 import { cosine } from "@/lib/embeddings/providers";
 import { atsKeywordCheck, reportConfidence, type AtsCheck, type ReportConfidence } from "@/lib/fit-report/calc";
-import { buildStats, type AnalystInput, type ResponsibilityMatch } from "@/lib/fit-report/context";
+import { buildStats, type AnalystInput, type ResponsibilityMatch, type Stat } from "@/lib/fit-report/context";
 import type { FitReport } from "@/lib/fit-report/schema";
 import type { ValidationResult } from "@/lib/fit-report/validate";
 import { FIT_ANALYST_PROMPT_VERSION, writeFitReport } from "@/server/ai/fit-analyst";
@@ -26,6 +26,8 @@ export type StoredFitReport = Omit<FitReport, "risks"> & {
   ats: AtsCheck;
   confidence: ReportConfidence;
   matches: ResponsibilityMatch[];
+  /** S1…Sn as given to FitAnalyst, so the page can show what each cited stat says. */
+  stats: Stat[];
   mode: "ai" | "cache" | "no_ai";
   provider: string | null;
 };
@@ -194,6 +196,7 @@ export async function generateFitReport(
       reportVerified: written.validation.passed,
     }),
     matches,
+    stats,
     mode: written.mode,
     provider: written.provider,
   };

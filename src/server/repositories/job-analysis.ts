@@ -153,11 +153,19 @@ export async function saveJobAnalysis(userId: string, data: JobAnalysisData) {
     gains: json(data.gains),
     salaryContext: data.salaryContext === null ? undefined : json(data.salaryContext),
   };
-  return db.jobAnalysis.upsert({
-    where: { userId_jobId_inputHash: { userId, jobId: data.jobId, inputHash: data.inputHash } },
-    create: { userId, jobId: data.jobId, inputHash: data.inputHash, ...values },
-    update: values,
-  });
+  const [saved] = await db.$transaction([
+    db.jobAnalysis.upsert({
+      where: { userId_jobId_inputHash: { userId, jobId: data.jobId, inputHash: data.inputHash } },
+      create: { userId, jobId: data.jobId, inputHash: data.inputHash, ...values },
+      update: values,
+    }),
+    // The job carries its latest Fit score, so the feed can sort and filter by it.
+    db.job.updateMany({
+      where: { id: data.jobId, userId },
+      data: { fitScore: data.scoreTotal, fitRecommendation: data.recommendation, sortScore: data.scoreTotal },
+    }),
+  ]);
+  return saved;
 }
 
 export async function findJobAnalysis(userId: string, jobId: string, inputHash: string) {
@@ -201,4 +209,9 @@ export async function saveFitReport(
       promptVersion: data.promptVersion,
     },
   });
+}
+
+/** Fit Reports written since `since` (the AI wrote or rewrote them), for the hourly cap. */
+export async function countFitReportsSince(userId: string, since: Date) {
+  return db.jobAnalysis.count({ where: { userId, promptVersion: { not: null }, updatedAt: { gte: since } } });
 }

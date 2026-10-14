@@ -30,6 +30,12 @@ const CARDS: { service: BuiltService; description: string; envVar: string }[] = 
       "Turns your profile and job descriptions into vectors for semantic matching. Every provider runs the same model, so their results can be compared.",
     envVar: "EMBEDDING_PROVIDERS",
   },
+  {
+    service: "web_search",
+    description:
+      "Finds company career sites (job boards on Greenhouse, Lever, Ashby and others) for deep search. When every provider is used up, known sites are still checked.",
+    envVar: "WEB_SEARCH_PROVIDERS",
+  },
 ];
 
 export default function ServicesPage() {

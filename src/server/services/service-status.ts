@@ -6,6 +6,7 @@ import type { ProviderInfo, ServiceName } from "@/lib/providers/types";
 import { loadAiProviders } from "@/server/ai/runner";
 import { loadEmbeddingProviders } from "@/server/embeddings/runner";
 import { loadJobSearchProviders } from "@/server/jobsearch/runner";
+import { loadWebSearchProviders } from "@/server/websearch/runner";
 import { prismaProviderStore } from "@/server/repositories/provider-state";
 
 /** The services Settings → Services shows, with how each loads its chain. */
@@ -13,6 +14,7 @@ export const SERVICES = {
   ai: { label: "AI", load: loadAiProviders },
   job_search: { label: "Job search", load: loadJobSearchProviders },
   embeddings: { label: "Embeddings", load: loadEmbeddingProviders },
+  web_search: { label: "Web search", load: loadWebSearchProviders },
 } as const satisfies Partial<
   Record<ServiceName, { label: string; load: () => Promise<{ providers: ProviderInfo[]; disabled: Set<string> }> }>
 >;

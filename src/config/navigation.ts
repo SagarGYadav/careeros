@@ -38,7 +38,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "For you", href: "/jobs", icon: Briefcase, enabled: true, keywords: ["feed", "matches"] },
       { title: "Target roles", href: "/jobs/roles", icon: Target, enabled: true, keywords: ["roles", "suggest"] },
-      { title: "Company sites", href: "/jobs/company-sites", icon: Building2, enabled: false },
+      {
+        title: "Company sites",
+        href: "/jobs/company-sites",
+        icon: Building2,
+        enabled: true,
+        keywords: ["careers", "watchlist", "ats"],
+      },
       { title: "Add job", href: "/jobs/new", icon: FilePlus, enabled: true, keywords: ["paste", "url", "manual"] },
     ],
   },

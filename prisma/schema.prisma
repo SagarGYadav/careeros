@@ -45,6 +45,7 @@ model User {
   jobRequirements JobRequirement[]
   scoringConfigs  ScoringConfig[]
   jobAnalyses     JobAnalysis[]
+  careerSites     CareerSite[]
 
   @@map("users")
 }
@@ -561,20 +562,21 @@ model TargetRole {
 /// An employer, one row per user and normalised name (SPEC §4). Staffing agencies and companies the user blocks
 /// are kept so their postings can be hidden.
 model Company {
-  id               String   @id @default(cuid())
+  id               String       @id @default(cuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
   /// Lower case, legal suffixes removed ("Kestrel Pay Pvt. Ltd." → "kestrel pay").
   normalizedName   String
   aliases          String[]
   website          String?
   careersUrl       String?
-  isStaffingAgency Boolean  @default(false)
-  isBlocked        Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  isStaffingAgency Boolean      @default(false)
+  isBlocked        Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
   jobs             Job[]
+  careerSites      CareerSite[]
 
   @@unique([userId, normalizedName])
   @@map("companies")
@@ -776,4 +778,42 @@ model JobAnalysis {
   @@unique([userId, jobId, inputHash])
   @@index([userId, jobId, createdAt])
   @@map("job_analyses")
+}
+
+/// A company career site CareerOS knows about (SPEC §11.2): an ATS job board or a careers page. The registry grows
+/// with every discovery, so later runs mostly re-check known sites through keyless APIs.
+model CareerSite {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId        String?
+  company          Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  /// Company or board name as shown.
+  name             String
+  /// Stable identity: "greenhouse:kestrelpay", "html:careers.example.com/jobs", or "name:kestrel pay" while unresolved.
+  key              String
+  /// greenhouse | lever | ashby | smartrecruiters | recruitee | jsonld | html | unknown (a watchlist name not found yet)
+  kind             String
+  boardToken       String?
+  url              String?
+  /// discovered | user
+  source           String
+  /// active | unresolved | no_relevant_jobs | blocked_by_robots | failed
+  status           String    @default("active")
+  /// The web search that found it, for transparency.
+  discoveredFrom   String?
+  lastFetchedAt    DateTime?
+  nextCheckAt      DateTime?
+  lastJobCount     Int       @default(0)
+  relevantJobCount Int       @default(0)
+  /// Runs in a row without a relevant job (after 3, the site is checked weekly).
+  emptyRuns        Int       @default(0)
+  failures         Int       @default(0)
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId, status, nextCheckAt])
+  @@map("career_sites")
 }

@@ -35,7 +35,7 @@ export function ProviderChainTable({
   service,
   rows,
 }: {
-  service: "ai" | "job_search" | "embeddings";
+  service: "ai" | "job_search" | "embeddings" | "web_search";
   rows: ProviderRow[];
 }) {
   const [pending, startTransition] = useTransition();

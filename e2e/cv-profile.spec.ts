@@ -359,4 +359,26 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "fit-report");
   });
+  test("company sites are discovered by web search and kept with a watchlist", async ({ page }) => {
+    // Up to 20 searches, each recording provider usage in the remote test database.
+    test.setTimeout(120_000);
+    await page.goto("/jobs/company-sites");
+    await expect(page.getByRole("heading", { level: 1, name: "Company sites" })).toBeVisible();
+    await expect(page.getByText("No company sites yet")).toBeVisible();
+
+    await page.getByLabel("Company name or careers page link").fill("https://www.linkedin.com/company/x");
+    await page.getByRole("button", { name: "Add to watchlist" }).click();
+    await expect(page.getByText(/doesn't read LinkedIn or Naukri/)).toBeVisible();
+    await page.getByLabel("Company name or careers page link").fill("Tamarind Commerce");
+    await page.getByRole("button", { name: "Add to watchlist" }).click();
+    await expect(page.getByText("Looking for it")).toBeVisible();
+
+    await page.getByRole("button", { name: "Discover company sites" }).click();
+    await expect(page.getByText(/new sites? from \d+ web searches?/)).toBeVisible({ timeout: 100_000 });
+    await expect(page.getByRole("cell", { name: /Kestrelpay|Kestrel/ }).first()).toBeVisible();
+    await expect(page.getByText("Greenhouse").first()).toBeVisible();
+    await expect(page.getByText("Looking for it")).toHaveCount(0);
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "company-sites");
+  });
 });

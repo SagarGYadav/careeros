@@ -16,6 +16,8 @@ export type AnalystRequirement = {
   quote: string;
   codeStatus: RequirementStatus;
   codeReason: string;
+  /** The user holds this skill (or one that implies it) at some level; a semantic match is then not allowed. */
+  held: boolean;
   /** CV evidence ids where the user's matching skill appears (from the profile), if any. */
   evidenceIds: string[];
   /** Learning effort of the skill (1 small, 2 medium, 3 large), from the skill taxonomy. */

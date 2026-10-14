@@ -12,6 +12,7 @@ import { SALARY_CONTEXT_DAYS, salaryContext, type SalaryContext } from "@/lib/sc
 import { buildSkillIndex } from "@/lib/skills/normalize";
 import { storedDealbreakersSchema } from "@/lib/validation/profile";
 import { extractJobWithAi, JOB_EXTRACTOR_PROMPT_VERSION } from "@/server/ai/job-extractor";
+import type { AiRunner } from "@/lib/ai/runner";
 import { ai } from "@/server/ai/runner";
 import {
   findJobAnalysis,
@@ -46,7 +47,11 @@ export type ExtractionOutcome = {
  * Reads a job's requirements with JobExtractor (fast tier) and the code checks in lib/jobs/requirements. A job
  * already extracted from the same description with the same prompt version is not extracted again.
  */
-export async function extractJobRequirements(userId: string, jobId: string): Promise<ExtractionOutcome> {
+export async function extractJobRequirements(
+  userId: string,
+  jobId: string,
+  options: { runner?: AiRunner } = {},
+): Promise<ExtractionOutcome> {
   const job = await getJobForAnalysis(userId, jobId);
   if (!job) throw new AppError("NOT_FOUND");
   if (
@@ -78,7 +83,7 @@ export async function extractJobRequirements(userId: string, jobId: string): Pro
 
   const [families, catalogue] = await Promise.all([listRoleFamilies(), listSkillCatalogue(userId)]);
   const result = await extractJobWithAi(
-    ai,
+    options.runner ?? ai,
     {
       text: job.descriptionRaw,
       title: job.title,
@@ -201,9 +206,10 @@ export async function analyseJobFit(
   userId: string,
   jobId: string,
   now = new Date(),
-  options: { semanticMatches?: string[] } = {},
+  /** runner: the AI runner to use (the eval passes one provider); semanticMatches: accepted by the validator. */
+  options: { semanticMatches?: string[]; runner?: AiRunner } = {},
 ): Promise<FitAnalysis> {
-  const extracted = await extractJobRequirements(userId, jobId);
+  const extracted = await extractJobRequirements(userId, jobId, { runner: options.runner });
   const [job, profile, configRow, resume] = await Promise.all([
     getJobForAnalysis(userId, jobId),
     fitProfile(userId),

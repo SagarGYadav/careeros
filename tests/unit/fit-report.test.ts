@@ -118,7 +118,12 @@ const input: AnalystInput = {
       evidenceIds: [],
       learningEffort: null,
     },
-  ].map((r) => ({ ...r, codeStatus: assessed.get(r.reqId)!.status, codeReason: assessed.get(r.reqId)!.reason })),
+  ].map((r) => ({
+    ...r,
+    held: r.reqId === "R1",
+    codeStatus: assessed.get(r.reqId)!.status,
+    codeReason: assessed.get(r.reqId)!.reason,
+  })),
   evidence: [
     { id: "E1", text: "Built the merchant dashboard in React for 1,200 merchants", section: "experience" },
     { id: "E2", text: "Designed Apollo client caching for the orders API", section: "experience" },
@@ -179,10 +184,42 @@ describe("Fit Report validator", () => {
     expect(validateFitReport(r, input).passed).toBe(true);
   });
 
+  it("accepts numbers from a cited requirement's computed reason", () => {
+    const r = good();
+    const reason = input.requirements[0].codeReason; // e.g. "React at level 4."
+    const level = reason.match(/level (\d)/)![1];
+    r.experienceRelevance.domainAndScale = {
+      text: `Your React is at level ${level}.`,
+      evidenceIds: [],
+      requirementIds: [],
+      statIds: [],
+    };
+    expect(messages(r)).toEqual([`Numbers not backed by a cited stat, CV line or requirement: ${level}.`]);
+    r.experienceRelevance.domainAndScale.requirementIds = ["R1"];
+    expect(validateFitReport(r, input).passed).toBe(true);
+  });
+
+  it("wants numbers and names in the text, not the ids it cites", () => {
+    const r = good();
+    r.summary = { text: "Your fit score is S1.", evidenceIds: [], requirementIds: [], statIds: ["S1"] };
+    expect(messages(r)).toEqual(["Write the number or name instead of the id in the text (S1)."]);
+    r.summary = {
+      text: `Your fit score is ${score.total} of 100; you also know AWS S3.`,
+      evidenceIds: [],
+      requirementIds: [],
+      statIds: ["S1"],
+    };
+    expect(validateFitReport(r, input).passed).toBe(true);
+  });
+
   it("needs every required requirement, with the code's status unless a semantic match is shown", () => {
     const r = good();
     r.requirements = r.requirements.filter((a) => a.reqId !== "R3");
     expect(messages(r)).toEqual(["Required requirement R3 (Bachelor's degree) is not assessed."]);
+
+    const agreeing = good();
+    agreeing.requirements[0] = { ...agreeing.requirements[0], semanticMatch: true };
+    expect(validateFitReport(agreeing, input).passed).toBe(true);
 
     const changed = good();
     changed.requirements[0] = { ...changed.requirements[0], status: "partial" };
@@ -194,9 +231,19 @@ describe("Fit Report validator", () => {
       status: "partial",
       semanticMatch: true,
       evidenceIds: ["E2"],
+      statIds: [],
       note: "Apollo client is GraphQL.",
     };
     expect(validateFitReport(semantic, input)).toMatchObject({ passed: true, acceptedSemanticMatches: ["R2"] });
+    // A skill the user already holds (R1, React) was judged by the code; no semantic upgrade.
+    const held = good();
+    held.requirements[0] = { ...held.requirements[0], status: "partial", semanticMatch: true };
+    expect(
+      validateFitReport(held, {
+        ...input,
+        requirements: input.requirements.map((r) => (r.reqId === "R1" ? { ...r, codeStatus: "missing" as const } : r)),
+      }).acceptedSemanticMatches,
+    ).toEqual([]);
     semantic.requirements[1].evidenceIds = [];
     expect(paths(semantic)).toContain("requirements.1");
 
@@ -206,6 +253,7 @@ describe("Fit Report validator", () => {
       status: "strong",
       semanticMatch: false,
       evidenceIds: [],
+      statIds: [],
       note: "Has a degree.",
     };
     expect(messages(education)).toEqual(["R3 is strong: cite the CV evidence (E…)."]);

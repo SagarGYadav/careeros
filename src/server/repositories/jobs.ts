@@ -86,7 +86,7 @@ export function mergeIntoJob(
 }
 
 export async function runBatch(statements: Prisma.PrismaPromise<unknown>[]) {
-  if (statements.length) await db.$transaction(statements);
+  if (statements.length) await db.$transaction(statements, { maxWait: 10_000, timeout: 30_000 });
 }
 
 /** Jobs to rank, in pages. */

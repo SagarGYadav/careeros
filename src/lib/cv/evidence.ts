@@ -25,6 +25,35 @@ export function mentionsSkill(keys: Set<string>, name: string): boolean {
   return Boolean(key) && (keys.has(key) || keys.has(`${key}js`) || (key.endsWith("js") && keys.has(key.slice(0, -2))));
 }
 
+/** Short or common-word skill names ("Go", "Express") must appear capitalised as a whole word to count. */
+const AMBIGUOUS = new Set([
+  "go",
+  "r",
+  "c",
+  "express",
+  "spring",
+  "swift",
+  "rust",
+  "dart",
+  "ember",
+  "less",
+  "jest",
+  "make",
+]);
+
+export function mentionsCatalogueSkill(text: string, keys: Set<string>, skill: { name: string; aliases: string[] }) {
+  for (const name of [skill.name, ...skill.aliases]) {
+    const key = skillKey(name);
+    if (AMBIGUOUS.has(key) || key.length <= 2) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9#+])`).test(text) && /^[A-Z]/.test(name)) return true;
+      continue;
+    }
+    if (mentionsSkill(keys, name)) return true;
+  }
+  return false;
+}
+
 type PageLocator = (text: string) => number | null;
 
 /** The page a quote is on (PDFs only), or null. */
@@ -133,4 +162,34 @@ export function buildEvidenceCatalog(
   for (const skill of draft.skills.inferred) skill.evidenceIds = mentions(skill.name);
 
   return items;
+}
+
+/** A skill name as a case-insensitive pattern that also matches spacing variants ("Next JS", "next-js"). */
+function namePattern(name: string): RegExp {
+  const parts = name
+    .split(/[\s.\-]+/)
+    .filter(Boolean)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(parts.join("[\\s.\\-]*"), "gi");
+}
+
+/**
+ * The catalogue skills a text names, without counting a shorter name inside a longer one: "GitHub Actions" is not
+ * also "GitHub". Longer names are matched first and taken out of the text. Results keep the catalogue's order.
+ */
+export function catalogueSkillsIn<T extends { name: string; aliases: string[] }>(text: string, catalogue: T[]): T[] {
+  const longest = (skill: T) => Math.max(...[skill.name, ...skill.aliases].map((n) => n.length));
+  const byLength = [...catalogue].sort((a, b) => longest(b) - longest(a));
+  const found = new Set<T>();
+  let remaining = text;
+  let keys = skillKeysIn(remaining);
+  for (const skill of byLength) {
+    if (!mentionsCatalogueSkill(remaining, keys, skill)) continue;
+    found.add(skill);
+    for (const name of [skill.name, ...skill.aliases]) {
+      remaining = remaining.replace(namePattern(name), " ");
+    }
+    keys = skillKeysIn(remaining);
+  }
+  return catalogue.filter((skill) => found.has(skill));
 }

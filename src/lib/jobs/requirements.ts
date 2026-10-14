@@ -3,7 +3,7 @@
 // 2. Skill names map to the catalogue (aliases included), so scoring compares like with like.
 // 3. Catalogue skills the posting names that no requirement covers are added as "implied" (source "keyword").
 // 4. Duplicates merge (the higher importance wins), then requirements get ids R1…Rn, must-haves first.
-import { skillKeysIn } from "@/lib/cv/evidence";
+import { catalogueSkillsIn, skillKeysIn } from "@/lib/cv/evidence";
 import { bestMatchScore, normalizeForMatch, splitLines } from "@/lib/cv/text";
 import { matchSkill, type SkillCatalogueEntry } from "@/lib/skills/normalize";
 import { mentionsCatalogueSkill } from "./extract-heuristic";
@@ -45,6 +45,16 @@ function lineNaming(text: string, skill: SkillCatalogueEntry): string {
   );
 }
 
+/**
+ * The one catalogue skill a longer name contains: "Web performance tuning" → Web performance, "Web accessibility
+ * (WCAG)" → Web accessibility. Null when it names none or several (those should be separate requirements).
+ */
+function containedSkill<T extends SkillCatalogueEntry>(name: string, catalogue: T[]): T | null {
+  const keys = skillKeysIn(name);
+  const found = catalogue.filter((skill) => mentionsCatalogueSkill(name, keys, skill));
+  return found.length === 1 ? found[0] : null;
+}
+
 export function finalizeRequirements<T extends SkillCatalogueEntry>(
   extracted: ExtractedRequirement[],
   descriptionText: string,
@@ -65,7 +75,8 @@ export function finalizeRequirements<T extends SkillCatalogueEntry>(
     }
     const skill =
       (req.skillName ? matchSkill(index, req.skillName) : null) ??
-      (req.kind === "skill" ? matchSkill(index, req.text) : null);
+      (req.kind === "skill" ? matchSkill(index, req.text) : null) ??
+      (req.kind === "skill" ? containedSkill(req.skillName ?? req.text, catalogue) : null);
     // "3+ years of React" may come back as an experience requirement; with a known skill it is a skill requirement.
     const kind: RequirementKind = skill && (req.kind === "skill" || req.kind === "experience") ? "skill" : req.kind;
     drafts.push({
@@ -81,10 +92,9 @@ export function finalizeRequirements<T extends SkillCatalogueEntry>(
     });
   });
 
-  const keys = skillKeysIn(descriptionText);
   const covered = new Set(drafts.map((d) => d.skillId).filter(Boolean));
-  for (const skill of catalogue) {
-    if (covered.has(skill.id) || !mentionsCatalogueSkill(descriptionText, keys, skill)) continue;
+  for (const skill of catalogueSkillsIn(descriptionText, catalogue)) {
+    if (covered.has(skill.id)) continue;
     covered.add(skill.id);
     drafts.push({
       skillId: skill.id,

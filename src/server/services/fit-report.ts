@@ -7,6 +7,7 @@ import { buildStats, type AnalystInput, type ResponsibilityMatch, type Stat } fr
 import type { FitReport } from "@/lib/fit-report/schema";
 import type { ValidationResult } from "@/lib/fit-report/validate";
 import { FIT_ANALYST_PROMPT_VERSION, writeFitReport } from "@/server/ai/fit-analyst";
+import type { AiRunner } from "@/lib/ai/runner";
 import { ai } from "@/server/ai/runner";
 import { embeddings } from "@/server/embeddings/runner";
 import { saveFitReport } from "@/server/repositories/job-analysis";
@@ -75,11 +76,12 @@ async function matchDuties(duties: string[], evidence: { id: string; text: strin
 export async function generateFitReport(
   userId: string,
   jobId: string,
-  options: { now?: Date; onStage?: (stage: FitReportStage) => void } = {},
+  options: { now?: Date; onStage?: (stage: FitReportStage) => void; runner?: AiRunner } = {},
 ): Promise<FitReportView> {
   const now = options.now ?? new Date();
   options.onStage?.("requirements");
-  let analysis = await analyseJobFit(userId, jobId, now);
+  const runner = options.runner ?? ai;
+  let analysis = await analyseJobFit(userId, jobId, now, { runner });
   if (analysis.stored.report && analysis.stored.promptVersion === FIT_ANALYST_PROMPT_VERSION) {
     return {
       analysis,
@@ -144,6 +146,7 @@ export async function generateFitReport(
         quote: r.quote,
         codeStatus: status?.status ?? "unscored",
         codeReason: status?.reason ?? "",
+        held: Boolean(r.skillId && [r.skillId, ...(implies.get(r.skillId) ?? [])].some((id) => profile.skills.has(id))),
         evidenceIds: [...new Set(ids)].slice(0, 5),
         learningEffort: r.skillId ? (skillInfo.get(r.skillId)?.learningEffort ?? null) : null,
       };
@@ -156,13 +159,14 @@ export async function generateFitReport(
   };
 
   options.onStage?.("writing");
-  const written = await writeFitReport(ai, input, job.descriptionRaw, userId);
+  const written = await writeFitReport(runner, input, job.descriptionRaw, userId);
 
   options.onStage?.("saving");
   const codeOnlyTotal = score.total;
   if (written.validation.acceptedSemanticMatches.length) {
     analysis = await analyseJobFit(userId, jobId, now, {
       semanticMatches: written.validation.acceptedSemanticMatches,
+      runner,
     });
   }
   const effortOf = (reqIds: string[]) => {

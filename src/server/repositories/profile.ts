@@ -180,7 +180,8 @@ export async function savePersonalDetails(userId: string, personal: CvDraft["per
 
 /** Runs write statements as one batch transaction. */
 export async function runBatch(statements: Prisma.PrismaPromise<unknown>[]) {
-  await db.$transaction(statements);
+  // Each statement is a round trip to the database; a CV with many entries needs more than the default 5 s.
+  await db.$transaction(statements, { maxWait: 10_000, timeout: 30_000 });
 }
 
 /** When the user last opened the "For you" feed; jobs found after it get a "New" badge. */

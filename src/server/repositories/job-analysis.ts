@@ -5,6 +5,8 @@ import type { ScoringSettings } from "@/lib/scoring/config";
 import { db } from "@/server/db";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
+// Neon may take a few seconds to hand out a connection after being idle; Prisma's default wait is 2 s.
+const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 20_000 };
 
 /** Everything Fit analysis needs from one job. */
 export async function getJobForAnalysis(userId: string, jobId: string) {
@@ -58,41 +60,44 @@ export async function saveJobExtraction(
   },
   requirements: FinalRequirement[],
 ) {
-  await db.$transaction([
-    db.jobRequirement.deleteMany({ where: { userId, jobId } }),
-    db.jobRequirement.createMany({
-      data: requirements.map((r) => ({
-        userId,
-        jobId,
-        reqId: r.reqId,
-        skillId: r.skillId,
-        text: r.text,
-        kind: r.kind,
-        importance: r.importance,
-        yearsRequired: r.yearsRequired,
-        quote: r.quote,
-        source: r.source,
-        sortOrder: r.sortOrder,
-      })),
-    }),
-    db.job.updateMany({
-      where: { id: jobId, userId },
-      data: {
-        responsibilities: data.responsibilities,
-        extraction: json(data.extraction),
-        extractedAt: new Date(),
-        extractionMode: data.mode,
-        extractionModel: data.model,
-        extractionPromptVersion: data.promptVersion,
-        extractionSourceHash: data.sourceHash,
-        injectionSuspected: data.injectionSuspected,
-        roleFamilyId: data.roleFamilyId,
-        expMinYears: data.expMinYears,
-        expMaxYears: data.expMaxYears,
-        seniority: data.seniority,
-      },
-    }),
-  ]);
+  await db.$transaction(
+    [
+      db.jobRequirement.deleteMany({ where: { userId, jobId } }),
+      db.jobRequirement.createMany({
+        data: requirements.map((r) => ({
+          userId,
+          jobId,
+          reqId: r.reqId,
+          skillId: r.skillId,
+          text: r.text,
+          kind: r.kind,
+          importance: r.importance,
+          yearsRequired: r.yearsRequired,
+          quote: r.quote,
+          source: r.source,
+          sortOrder: r.sortOrder,
+        })),
+      }),
+      db.job.updateMany({
+        where: { id: jobId, userId },
+        data: {
+          responsibilities: data.responsibilities,
+          extraction: json(data.extraction),
+          extractedAt: new Date(),
+          extractionMode: data.mode,
+          extractionModel: data.model,
+          extractionPromptVersion: data.promptVersion,
+          extractionSourceHash: data.sourceHash,
+          injectionSuspected: data.injectionSuspected,
+          roleFamilyId: data.roleFamilyId,
+          expMinYears: data.expMinYears,
+          expMaxYears: data.expMaxYears,
+          seniority: data.seniority,
+        },
+      }),
+    ],
+    TRANSACTION_OPTIONS,
+  );
 }
 
 export async function listJobRequirements(userId: string, jobId: string) {
@@ -153,18 +158,21 @@ export async function saveJobAnalysis(userId: string, data: JobAnalysisData) {
     gains: json(data.gains),
     salaryContext: data.salaryContext === null ? undefined : json(data.salaryContext),
   };
-  const [saved] = await db.$transaction([
-    db.jobAnalysis.upsert({
-      where: { userId_jobId_inputHash: { userId, jobId: data.jobId, inputHash: data.inputHash } },
-      create: { userId, jobId: data.jobId, inputHash: data.inputHash, ...values },
-      update: values,
-    }),
-    // The job carries its latest Fit score, so the feed can sort and filter by it.
-    db.job.updateMany({
-      where: { id: data.jobId, userId },
-      data: { fitScore: data.scoreTotal, fitRecommendation: data.recommendation, sortScore: data.scoreTotal },
-    }),
-  ]);
+  const [saved] = await db.$transaction(
+    [
+      db.jobAnalysis.upsert({
+        where: { userId_jobId_inputHash: { userId, jobId: data.jobId, inputHash: data.inputHash } },
+        create: { userId, jobId: data.jobId, inputHash: data.inputHash, ...values },
+        update: values,
+      }),
+      // The job carries its latest Fit score, so the feed can sort and filter by it.
+      db.job.updateMany({
+        where: { id: data.jobId, userId },
+        data: { fitScore: data.scoreTotal, fitRecommendation: data.recommendation, sortScore: data.scoreTotal },
+      }),
+    ],
+    TRANSACTION_OPTIONS,
+  );
   return saved;
 }
 

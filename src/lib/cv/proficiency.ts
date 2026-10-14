@@ -1,7 +1,7 @@
 // Skill usage and suggested proficiency (SPEC §9.3). A transparent rule in code: years used, recency and how many
 // roles and projects show the skill. The user confirms or changes the level; the AI never sets it.
 import { currentYearMonth, experienceTotals } from "./dates";
-import { mentionsSkill, skillKeysIn } from "./evidence";
+import { mentionsCatalogueSkill, mentionsSkill, skillKeysIn } from "./evidence";
 import type { CvDraft } from "./schema";
 
 export type SkillUsage = {
@@ -26,11 +26,13 @@ export function skillUsage(
   listed: boolean,
   now: Date,
   impliedBy: string[] = [],
+  /** Other names of the skill ("WCAG" for Web accessibility), which count as using it. */
+  aliases: string[] = [],
 ): SkillUsage {
   const via = new Set<string>();
   const uses = (text: string) => {
     const keys = skillKeysIn(text);
-    if (mentionsSkill(keys, name)) return true;
+    if (mentionsCatalogueSkill(text, keys, { name, aliases })) return true;
     const implying = impliedBy.find((other) => mentionsSkill(keys, other));
     if (implying) via.add(implying);
     return Boolean(implying);

@@ -41,6 +41,7 @@ export const fitReportSchema = z.object({
         .boolean()
         .describe("True only when CareerOS marked the skill missing but the cited CV evidence shows it"),
       evidenceIds: ids("CV evidence for the status"),
+      statIds: ids("Computed stat ids (S…) whose numbers the note uses"),
       note: z.string(),
     }),
   ),

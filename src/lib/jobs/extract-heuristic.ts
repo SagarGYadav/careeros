@@ -1,9 +1,8 @@
 // Deterministic JobExtractor (SPEC §8.1): reads section headings ("Requirements", "Good to have"), importance words
 // ("must", "a plus") and catalogue skill names. It is the mock AI's answer in development and tests, and the no-AI
 // fallback. It finds less than the AI does (no paraphrase, no domain sense), but never invents anything.
-import { mentionsSkill, skillKeysIn } from "@/lib/cv/evidence";
+import { catalogueSkillsIn, mentionsCatalogueSkill } from "@/lib/cv/evidence";
 import { normalizeForMatch, similarity, splitLines, stripBullet } from "@/lib/cv/text";
-import { skillKey } from "@/lib/skills/normalize";
 import { parseExperience, seniorityFromPosting } from "./conditions";
 import type { ExtractedRequirement, JobExtraction, RequirementImportance, RequirementKind } from "./extraction";
 import { IMPORTANCE_RANK } from "./extraction";
@@ -44,35 +43,6 @@ const ACTION_START =
   /^(build|develop|design|own|work|collaborate|write|lead|maintain|implement|ensure|drive|create|optimi[sz]e|mentor|deliver|participate|review|improve|contribute|translate|architect|ship|debug|test)\b/i;
 const YEARS = /(\d{1,2}(?:\.\d)?)\s*\+?\s*(?:-|–|to)?\s*(?:\d{1,2}\s*)?\+?\s*(?:years?|yrs?)/i;
 
-/** Short or common-word skill names ("Go", "Express") must appear capitalised as a whole word to count. */
-const AMBIGUOUS = new Set([
-  "go",
-  "r",
-  "c",
-  "express",
-  "spring",
-  "swift",
-  "rust",
-  "dart",
-  "ember",
-  "less",
-  "jest",
-  "make",
-]);
-
-export function mentionsCatalogueSkill(text: string, keys: Set<string>, skill: { name: string; aliases: string[] }) {
-  for (const name of [skill.name, ...skill.aliases]) {
-    const key = skillKey(name);
-    if (AMBIGUOUS.has(key) || key.length <= 2) {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9#+])`).test(text) && /^[A-Z]/.test(name)) return true;
-      continue;
-    }
-    if (mentionsSkill(keys, name)) return true;
-  }
-  return false;
-}
-
 /** Words a heading starts with; without a colon, "Strong communication skills" is a requirement, not a heading. */
 const HEADING_START =
   /^(what|key|your|the|about|requirements?|responsibilities|qualifications?|skills|must|nice|good|preferred|bonus|who|benefits|perks|why|tech|job|role|eligibility|desired|required|minimum|basic|additional|technical)\b/i;
@@ -112,8 +82,7 @@ export function extractJobHeuristically(input: HeuristicExtractInput): JobExtrac
     const line = stripBullet(raw);
     if (!line || section === "other") continue;
 
-    const keys = skillKeysIn(line);
-    const skills = input.skills.filter((s) => mentionsCatalogueSkill(line, keys, s)).map((s) => s.name);
+    const skills = catalogueSkillsIn(line, input.skills).map((s) => s.name);
     const inlineImportance: RequirementImportance | null = NICE_WORDS.test(line)
       ? "nice_to_have"
       : PREFERRED_WORDS.test(line)
@@ -185,3 +154,5 @@ export function extractJobHeuristically(input: HeuristicExtractInput): JobExtrac
     requirements: requirements.slice(0, 40),
   };
 }
+
+export { mentionsCatalogueSkill };

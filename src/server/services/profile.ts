@@ -91,7 +91,14 @@ async function cvSkillRows(userId: string, draft: CvDraft, now: Date) {
     }
     // "React" and "React.js" are one skill; the skills-section entry wins.
     if (rows.has(skill.id)) continue;
-    const usage = skillUsage(draft, candidate.name, candidate.listed, now, implications.get(skill.id) ?? []);
+    const usage = skillUsage(
+      draft,
+      candidate.name,
+      candidate.listed,
+      now,
+      implications.get(skill.id) ?? [],
+      skill.aliases,
+    );
     const suggestion = suggestProficiency(usage, thisYear);
     rows.set(skill.id, {
       skillId: skill.id,

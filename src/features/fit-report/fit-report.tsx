@@ -226,7 +226,10 @@ export function FitReportView({ view, analysis }: { view: JobView; analysis: Ana
                       {ai && (
                         <p>
                           {ai.note}{" "}
-                          <Ids claim={{ evidenceIds: ai.evidenceIds, requirementIds: [], statIds: [] }} ctx={ctx} />{" "}
+                          <Ids
+                            claim={{ evidenceIds: ai.evidenceIds, requirementIds: [], statIds: ai.statIds ?? [] }}
+                            ctx={ctx}
+                          />{" "}
                           <Unverified path={`requirements.${ai.index}`} ctx={ctx} />
                         </p>
                       )}

@@ -58,6 +58,7 @@ export function deterministicFitReport(input: AnalystInput): FitReport {
       reqId: r.reqId,
       status: r.codeStatus === "unscored" ? ("unclear" as const) : r.codeStatus,
       semanticMatch: false,
+      statIds: [],
       evidenceIds: r.codeStatus === "strong" || r.codeStatus === "partial" ? r.evidenceIds.slice(0, 3) : [],
       note: r.codeStatus === "unscored" ? "Needs the AI review to judge against your CV." : "From your skills profile.",
     })),

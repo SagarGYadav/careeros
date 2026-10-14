@@ -30,7 +30,9 @@
     "db:migrate:create": "prisma migrate dev --create-only",
     "fixtures:cv": "tsx scripts/make-fixtures.ts",
     "eval:resume": "tsx --conditions=react-server scripts/eval-resume.ts",
-    "search:live": "tsx --conditions=react-server scripts/search-live.ts"
+    "search:live": "tsx --conditions=react-server scripts/search-live.ts",
+    "eval:jobs": "tsx --conditions=react-server scripts/eval-jobs.ts",
+    "eval:fit": "tsx --conditions=react-server scripts/eval-fit.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.93",

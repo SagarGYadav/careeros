@@ -7,6 +7,7 @@ import { db } from "@/server/db";
 import { savePreferences } from "@/server/repositories/profile";
 import { listTargetRoles, updateTargetRole } from "@/server/repositories/target-roles";
 import { processCvUpload } from "@/server/services/cv-pipeline";
+import { FIT_ANALYST_PROMPT_VERSION } from "@/server/ai/fit-analyst";
 import { generateFitReport } from "@/server/services/fit-report";
 import { analyseJobFit } from "@/server/services/job-analysis";
 import { confirmResume } from "@/server/services/profile";
@@ -175,7 +176,7 @@ describe("Fit analysis", () => {
     expect(view.report.confidence.level).toBe("medium"); // a short posting
 
     const saved = await db.jobAnalysis.findUniqueOrThrow({ where: { id: view.analysis.id } });
-    expect(saved).toMatchObject({ promptVersion: "1", model: "careeros-mock" });
+    expect(saved).toMatchObject({ promptVersion: FIT_ANALYST_PROMPT_VERSION, model: "careeros-mock" });
     expect(saved.report).not.toBeNull();
 
     const again = await generateFitReport(userId, jobId, { now: NOW });

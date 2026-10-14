@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractJobHeuristically, mentionsCatalogueSkill } from "@/lib/jobs/extract-heuristic";
 import { finalizeRequirements } from "@/lib/jobs/requirements";
-import { skillKeysIn } from "@/lib/cv/evidence";
+import { catalogueSkillsIn, skillKeysIn } from "@/lib/cv/evidence";
 import { buildSkillIndex } from "@/lib/skills/normalize";
 
 const CATALOGUE = [
@@ -164,5 +164,49 @@ describe("requirement checks in code", () => {
       buildSkillIndex(CATALOGUE),
     );
     expect(requirements[0]).toMatchObject({ kind: "skill", skillId: "react", text: "React", yearsRequired: 3 });
+  });
+  it("maps a longer skill name to the one catalogue skill it contains", () => {
+    const { requirements } = finalizeRequirements(
+      [
+        {
+          text: "GraphQL experience",
+          skillName: "GraphQL APIs in production",
+          kind: "skill",
+          importance: "preferred",
+          yearsRequired: null,
+          quote: "Good communication",
+        },
+        {
+          text: "React and Redux",
+          skillName: "React and Redux",
+          kind: "skill",
+          importance: "required",
+          yearsRequired: null,
+          quote: "Build dashboards in React",
+        },
+      ],
+      posting,
+      CATALOGUE,
+      buildSkillIndex(CATALOGUE),
+    );
+    expect(requirements.find((r) => r.skillId === "gql")).toMatchObject({ text: "GraphQL", importance: "preferred" });
+    // Two skills in one name stay unmapped (the extractor should have split them).
+    expect(requirements.find((r) => r.text === "React and Redux")?.skillId).toBeNull();
+  });
+});
+
+describe("catalogue skills in a text", () => {
+  const catalogue = [
+    { name: "GitHub", aliases: [] },
+    { name: "GitHub Actions", aliases: [] },
+    { name: "React", aliases: ["ReactJS"] },
+    { name: "React Native", aliases: [] },
+  ];
+  it("doesn't count a shorter name inside a longer one", () => {
+    const names = (text: string) => catalogueSkillsIn(text, catalogue).map((s) => s.name);
+    expect(names("Ship with Docker and GitHub Actions")).toEqual(["GitHub Actions"]);
+    expect(names("Code on GitHub, deploy with GitHub Actions")).toEqual(["GitHub", "GitHub Actions"]);
+    expect(names("Mobile apps in React Native")).toEqual(["React Native"]);
+    expect(names("Web in ReactJS, mobile in React Native")).toEqual(["React", "React Native"]);
   });
 });

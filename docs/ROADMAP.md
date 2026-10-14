@@ -75,7 +75,7 @@ session (local or cloud) can continue.
 - [x] 4b FitAnalyst (strong tier, streamed) + validator (§8.4 + §12.5 rules) + repair
 - [x] 4c Fit Report page (every §12.4 section, trust badges, print view, Copy report), auto reports for the top N jobs
       of each run, "Analyse" for others, Add job (paste, URL with SSRF guard + JSON-LD, manual)
-- [ ] 4d Golden set (10 CV + JD pairs with checklists), `npm run eval:jobs` and `npm run eval:fit` with real Gemini;
+- [x] 4d Golden set (10 CV + JD pairs with checklists), `npm run eval:jobs` and `npm run eval:fit` with real Gemini;
       fix until the §12.6 targets are met
 - **Accept:** §12.6 targets met (numbers in Decisions); feed re-sorts by Fit score.
 
@@ -141,6 +141,15 @@ Each Part 2 phase is split into steps when it starts.
 - Overview: onboarding checklist that ticks itself from the data (CV, preferences, roles, first search, feed reviewed).
 - `npm run search:live` runs one full search with the real chains on a fictional CV (Adzuna forced to fail unless `--no-fail`).
 
+**Phase 4 (professional job analysis: the Fit Report)**
+- JobExtractor (fast tier) reads each posting's duties and requirements (kind, importance, years, the posting's own words); code drops anything not in the posting, maps skills to the catalogue (aliases, longest name first), adds missed catalogue skills as implied and numbers requirements R1…Rn, must-haves first.
+- Fit score in code (`lib/scoring`, §12.2): skills 45, experience 20, role 15, location 10, salary 10; condition checks; blockers; Apply / Consider / Low priority; score gains; salary context (n ≥ 5). Settings → Scoring edits weights and thresholds as versions.
+- FitAnalyst (strong tier) writes the judgement parts; every sentence cites E/R/S ids; the code validator checks ids, numbers, quotes, coverage, status consistency, strategy, banned phrases and lengths; one repair; leftovers shown as "Unverified". Accepted semantic matches (a skill shown in the CV under another name) count half, labelled AI.
+- Job page `/jobs/[id]`: every §12.4 section with CALC/AI badges and chips, print view, Copy report, "Analyse fit" with streamed progress; partial descriptions can be read from the job's page or pasted.
+- Search runs write Fit Reports for their top new matches (`JOB_DEEP_ANALYSIS_TOP_N`, default 5); the feed sorts by Fit score once analysed and shows "Fit 78 · Apply"; "Analysed only" filter.
+- Add job (`/jobs/new`): from a link (JSON-LD JobPosting, SSRF guard, robots.txt) or pasted/typed.
+- Evals: `npm run eval:jobs` and `npm run eval:fit` (10 fictional CV + JD pairs with machine-checked expert checklists, `evals/fit/cases.ts`); `--provider=` to compare models, `--provider=mock` for a dry run.
+
 ## Known gaps
 
 - Phase 1: no email verification or password reset (single-user app; add before opening sign-ups to others).
@@ -152,9 +161,14 @@ Each Part 2 phase is split into steps when it starts.
 - Phase 2: the eval set is six fictional CVs written for this project; real CVs vary more. The first real CV read correctly after the coverage fix.
 - Phase 2: provider day counters reset at midnight UTC, but Google resets Gemini quotas at midnight Pacific (07:00/08:00 UTC). After a heavy day CareerOS may skip Gemini for a few hours after Google has reset; nothing breaks (backups answer). Per-provider reset time zones are still not built: Phase 3 kept UTC periods for every provider and relies on the margins under each limit (e.g. Adzuna 225 of 250 a day).
 - Phase 2: OpenRouter's free model is slow (~40–80 s per CV); it is the last backup. Free model lists change, so `OPENROUTER_FREE_MODELS` may need updating.
-- Phase 3: the feed sorts by relevance and has no "analysed" filter yet; Fit scores and that filter come with the Fit Report (Phase 4). Role market stats show average relevance for the same reason.
+- Phase 3/4: role market stats still show average relevance, not average Fit score (most jobs are never analysed).
 - Phase 3: "New" badges mark jobs found since the feed was last opened; the visit is marked as seen when the page opens, so the badges stay only until you leave the page.
 - Phase 3: a dismissal that tunes ranking re-scores every job (up to 2,000) inside the request; fine at personal scale, would need a background step for much larger job lists.
+- Phase 4: §12.6 was measured with Gemini Flash-Lite writing the reports, because Gemini Flash answered 503 "high demand" (or timed out) on every attempt on 2026-10-14. Flash-Lite is the app's first backup, so this is a real path, but the Flash measurement is still owed: run `npm run eval:fit` when Flash is answering.
+- Phase 4: checklist misses in the final run (3 of 63): the staff-level report didn't name team leadership as a gap; the Quill Commerce work was described as "commerce platform" rather than end-to-end work; Priya's Angular counts as missing (see Decisions on stale skills).
+- Phase 4: a Fit score is not recomputed when the profile changes; "Analyse again" (or the next automatic run) updates it. Jobs analysed under older inputs keep their old score in the feed until then.
+- Phase 4: Add job reads only schema.org JobPosting data; a plain careers page without it needs pasting (the AI careers-page reader comes with Phase 5).
+- Phase 4: on free serverless hosting (60 s per request), an automatic report with a slow model could hit the limit; locally there is no limit. One report per advance call keeps the risk low.
 
 ## Decisions
 _(date — decision — reason)_
@@ -223,3 +237,7 @@ _(date — decision — reason)_
 - 2026-10-14 — Add job (`/jobs/new`, in the sidebar): from a link (schema.org JobPosting JSON-LD only, no AI) or pasted/typed; added jobs go through the same cleaning, duplicate check and relevance ranking as search results. Server fetches use the SSRF guard (http/https on default ports, no credentials or internal names, every resolved address public, re-checked on each of at most 3 redirects), robots.txt (RFC 9309, CareerOS group or *, cached an hour), the `CareerOS/1.0 (personal job search)` user agent, 10 s and 2 MB limits; LinkedIn and Naukri are never fetched. DNS is checked before the request; a rebinding attack between check and fetch remains possible and is accepted for a single-user app.
 - 2026-10-14 — Partial descriptions (§12.1): the job page warns, offers "Read full description from the job page" (the job's own apply links, JSON-LD, robots respected) and "Paste full description"; either replaces the description, so the next analysis re-reads the requirements.
 - 2026-10-14 — Sidebar highlights the most specific matching item (Target roles and Add job no longer also light up "For you").
+- 2026-10-14 — Golden set (§12.6): 10 fictional postings, each paired with one of the six fictional CVs, with hand-labelled requirements and 63 expert checklist items written as checks code can run (requirement status, blocker, recommendation, strategy, "a sentence in these sections mentions…", "cites CV evidence"). `eval:fit` runs the whole pipeline on the test database with fictional users (deleted afterwards); CVs are read with the mock AI so the quota goes to what is measured. One checklist item was changed after the first run, openly: Sneha's Flutter item accepted only "missing", but §12.2 gives a related skill (Flutter ↔ React Native in the taxonomy) half credit, so it now accepts "missing or partial". Golden importance labels were not changed after seeing results.
+- 2026-10-14 — Measured with real Gemini. JobExtractor (Flash-Lite): requirement recall 97.4% (75/77), importance accuracy 90.7% (68/75) — targets ≥ 90% and ≥ 85% met. Misses: implied soft skills (Leadership, Mentoring); in a one-paragraph posting the model marks technologies named in duties as "implied" (consistent with its prompt; labels left as written). Fit Reports (Flash-Lite, Flash unavailable): required-requirement coverage 100% (55/55), citation validity 100% (206/206), checklist hit rate 95.2% (60/63), banned phrases 0, 10/10 reports passing every check (6 after the one repair) — all targets met.
+- 2026-10-14 — Fixes found by the evals: the AI wrote ids instead of numbers ("You have S8 years") and the validator stripped ids before checking numbers — ids the claim cites may no longer appear in its text (prompt v2 says so with an example); requirement notes can cite stats; a cited requirement's computed reason backs its numbers; agreeing with the code is never flagged; "GitHub" was added as a requirement because of "GitHub Actions" — catalogue skills are now matched longest name first; a longer AI skill name maps to the one catalogue skill it contains ("Web performance tuning"); CV proficiency now counts a skill's aliases ("WCAG" for Web accessibility — Vikram had been held at level 2); semantic matches are accepted only for skills the user doesn't hold at all (a skill rated low by the code stays as rated, which made scores vary between runs); Neon batch transactions get 10 s to start and 30 s to run (a CV confirm timed out at Prisma's 5 s default).
+- 2026-10-14 — Open calibration question for the owner: a skill used 1.3 years and last used 4 years ago is level 1 (stale −1) and earns 0 under §12.2 ("level 2 → 0.5, else 0"), so Priya's Angular counts as missing for an Angular role. An expert would call it partial. Options: give level 1 a quarter credit, or soften the stale penalty for listed skills. Left as specified until decided.

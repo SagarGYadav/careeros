@@ -94,7 +94,8 @@ export function validateFitReport(report: FitReport, input: AnalystInput): Valid
       ...cited.e.flatMap((id) => numbersIn(evidence.get(id) ?? "")),
       ...cited.r.flatMap((id) => {
         const r = requirements.get(id);
-        return r ? numbersIn(`${r.text} ${r.quote}`) : [];
+        // A cited requirement backs the numbers in its words and in the code's computed reason ("level 2+ counts").
+        return r ? numbersIn(`${r.text} ${r.quote} ${r.codeReason}`) : [];
       }),
     ]);
     const unsupported = numbersIn(unquoted.replace(/\b[ERS]\d+\b/g, " ")).filter(
@@ -126,6 +127,9 @@ export function validateFitReport(report: FitReport, input: AnalystInput): Valid
     const cited = { e: claim.evidenceIds, r: claim.requirementIds, s: claim.statIds };
     checkIds(path, cited);
     checkText(path, claim.text, cited, maxWords);
+    // Ids belong in the lists; "You have S8 years" is unreadable. (Only ids the claim cites, so "AWS S3" is fine.)
+    const written = [...cited.e, ...cited.r, ...cited.s].filter((id) => new RegExp(`\\b${id}\\b`).test(claim.text));
+    if (written.length) issue(path, `Write the number or name instead of the id in the text (${written.join(", ")}).`);
     const hasE = claim.evidenceIds.some((id) => evidence.has(id));
     const hasR = claim.requirementIds.some((id) => requirements.has(id));
     if (need.evidence && !hasE) issue(path, "A statement about you must cite CV evidence (E…).");
@@ -163,8 +167,8 @@ export function validateFitReport(report: FitReport, input: AnalystInput): Valid
     if (!req) return issue(path, `Unknown requirement ${a.reqId}.`);
     if (seen.has(a.reqId)) issue(path, `${a.reqId} is assessed twice.`);
     seen.add(a.reqId);
-    checkIds(path, { e: a.evidenceIds, r: [], s: [] });
-    checkText(path, a.note, { e: a.evidenceIds, r: [a.reqId], s: [] }, LIMITS.noteWords);
+    checkIds(path, { e: a.evidenceIds, r: [], s: a.statIds });
+    checkText(path, a.note, { e: a.evidenceIds, r: [a.reqId], s: a.statIds }, LIMITS.noteWords);
     const cites = a.evidenceIds.some((id) => evidence.has(id));
     if (
       (a.status === "strong" || a.status === "partial") &&
@@ -174,9 +178,16 @@ export function validateFitReport(report: FitReport, input: AnalystInput): Valid
       issue(path, `${a.reqId} is ${a.status}: cite the CV evidence (${req.evidenceIds.join(", ") || "E…"}).`);
     }
     if (req.codeStatus === "unscored") return;
-    if (a.status === req.codeStatus && !a.semanticMatch) return;
+    // Agreeing with the code is always fine (a stray semanticMatch flag changes nothing).
+    if (a.status === req.codeStatus) return;
+    // "Under another name" only: a skill the user already holds at a low level was judged by the code.
     const semantic =
-      req.kind === "skill" && req.codeStatus === "missing" && a.status === "partial" && a.semanticMatch && cites;
+      req.kind === "skill" &&
+      !req.held &&
+      req.codeStatus === "missing" &&
+      a.status === "partial" &&
+      a.semanticMatch &&
+      cites;
     if (semantic) acceptedSemanticMatches.push(a.reqId);
     else issue(path, `${a.reqId} is ${req.codeStatus} by CareerOS's calculation, not ${a.status}.`);
   });

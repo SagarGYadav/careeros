@@ -47,6 +47,22 @@ describe("skill usage and suggested proficiency", () => {
     expect(withNext).toMatchObject({ roles: 2, months: 94, lastUsedYear: 2026, via: ["Next.js"] });
   });
 
+  it("counts a skill's other names (WCAG for Web accessibility) as using it", () => {
+    const audits = {
+      experience: [
+        role({
+          bullets: [{ id: "E1", text: "Fixed 140 WCAG issues across 3 apps.", kind: "achievement", hasMetric: true }],
+        }),
+      ],
+      projects: [],
+    };
+    expect(skillUsage(audits, "Web accessibility", true, NOW)).toMatchObject({ roles: 0 });
+    expect(skillUsage(audits, "Web accessibility", true, NOW, [], ["a11y", "WCAG"])).toMatchObject({
+      roles: 1,
+      months: 58,
+    });
+  });
+
   it("suggests a level from years, breadth and recency, and explains it", () => {
     const usage = { months: 94, lastUsedYear: 2026, roles: 2, projects: 1, listed: true, via: ["Next.js"] };
     expect(suggestProficiency(usage, 2026)).toEqual({

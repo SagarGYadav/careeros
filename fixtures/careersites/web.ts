@@ -39,8 +39,9 @@ const posting = (title: string, city: string | null, extra: Record<string, unkno
   ...(city && { jobLocation: { "@type": "Place", address: { addressLocality: city, addressCountry: "IN" } } }),
   ...extra,
 });
-const DESC =
-  "&lt;p&gt;Build fast, accessible web apps in React and TypeScript.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;3+ years&lt;/li&gt;&lt;/ul&gt;";
+/** Entity-encoded HTML, as Greenhouse sends it; each job gets its own text (real boards rarely repeat one). */
+const desc = (title: string) =>
+  `&lt;p&gt;As ${title}, build fast, accessible web apps in React and TypeScript.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;3+ years&lt;/li&gt;&lt;/ul&gt;`;
 
 export const FIXTURE_SITES: FixtureSite[] = [
   {
@@ -186,7 +187,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "Senior Frontend Engineer",
         location: { name: "Bengaluru, India" },
         absolute_url: "https://boards.greenhouse.io/kestrelpay/jobs/4012001",
-        content: DESC,
+        content: desc("Senior Frontend Engineer"),
         updated_at: "2026-10-05T10:00:00Z",
       },
       {
@@ -194,7 +195,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "Backend Engineer (Go)",
         location: { name: "Bengaluru, India" },
         absolute_url: "https://boards.greenhouse.io/kestrelpay/jobs/4012002",
-        content: DESC,
+        content: desc("Backend Engineer (Go)"),
         updated_at: "2026-10-05T10:00:00Z",
       },
       {
@@ -202,7 +203,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "Frontend Engineer",
         location: { name: "San Francisco, CA" },
         absolute_url: "https://boards.greenhouse.io/kestrelpay/jobs/4012003",
-        content: DESC,
+        content: desc("Frontend Engineer"),
         updated_at: "2026-10-05T10:00:00Z",
       },
       {
@@ -210,7 +211,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "React Developer",
         location: { name: "Remote - India" },
         absolute_url: "https://boards.greenhouse.io/kestrelpay/jobs/4012004",
-        content: DESC,
+        content: desc("React Developer"),
         updated_at: "2026-09-30T10:00:00Z",
       },
     ],
@@ -388,7 +389,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "Frontend Developer",
         location: { name: "Bengaluru" },
         absolute_url: "https://boards.greenhouse.io/saffronretail/jobs/5100001",
-        content: DESC,
+        content: desc("Frontend Developer"),
         updated_at: "2026-10-07T10:00:00Z",
       },
       {
@@ -396,7 +397,7 @@ export const FIXTURE_RESPONSES: Record<string, FixtureResponse> = {
         title: "Merchandiser",
         location: { name: "Chennai" },
         absolute_url: "https://boards.greenhouse.io/saffronretail/jobs/5100002",
-        content: DESC,
+        content: desc("Merchandiser"),
         updated_at: "2026-10-07T10:00:00Z",
       },
     ],

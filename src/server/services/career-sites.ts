@@ -8,7 +8,7 @@ import { checkUrl } from "@/lib/web/ssrf";
 import type { WebSearchRunner } from "@/lib/websearch/runner";
 import {
   addDiscoveredSites,
-  companiesByKey,
+  companiesByLetters,
   companiesWithoutSites,
   createCareerSite,
   deleteCareerSite,
@@ -55,11 +55,8 @@ export type DiscoverySummary = {
  * Finds company career sites with web searches (SPEC §11.2): ATS boards for the selected roles and places,
  * companies already seen in job-site results, and watchlist names. New sites join the registry.
  */
-export async function discoverCareerSites(
-  userId: string,
-  options: { runner?: WebSearchRunner; maxSearches?: number } = {},
-): Promise<DiscoverySummary> {
-  const runner = options.runner ?? webSearch;
+/** The discovery searches for this user now (§11.2), at most `maxSearches`. */
+export async function planDiscovery(userId: string, maxSearches = MAX_WEB_SEARCHES()): Promise<DiscoveryQuery[]> {
   const [roles, career, sites, seen] = await Promise.all([
     listTargetRoles(userId),
     getCareerProfile(userId),
@@ -75,14 +72,27 @@ export async function discoverCareerSites(
   ].filter((c) => c !== "Remote-India");
   const locations = (career?.workModes ?? []).includes("remote") ? [...cities, "Remote"] : cities;
   const unresolved = sites.filter((s) => s.status === "unresolved");
-  const queries = buildDiscoveryQueries({
+  return buildDiscoveryQueries({
     titles: selected.map((r) => r.titleVariants[0] ?? r.title),
     locations: locations.slice(0, 3),
     watchlistNames: unresolved.map((s) => s.name),
     seenCompanies: seen.map((c) => c.name),
-    max: options.maxSearches ?? MAX_WEB_SEARCHES(),
+    max: maxSearches,
   });
+}
 
+/**
+ * Runs discovery searches and adds the sites they find to the registry (watchlist names are resolved in place).
+ * Search runs call it a few queries at a time; the Company sites page runs the whole plan at once.
+ */
+export async function runDiscoveryQueries(
+  userId: string,
+  queries: DiscoveryQuery[],
+  runner: WebSearchRunner = webSearch,
+): Promise<DiscoverySummary> {
+  const unresolved = queries.some((q) => q.purpose === "watchlist")
+    ? (await listCareerSites(userId)).filter((s) => s.status === "unresolved")
+    : [];
   const summary: DiscoverySummary = {
     searches: 0,
     sitesSeen: 0,
@@ -129,14 +139,28 @@ export async function discoverCareerSites(
       }
     }
   }
-  // Link to companies already known from job-site results.
+  // Link to companies already known from job-site results, by name or by a board token with the same letters
+  // ("kestrelpay" → Kestrel Pay), and take the company's own name, so their jobs merge with job-site copies.
   const rows = [...found.values()];
-  const companyIds = await companiesByKey(userId, [...new Set(rows.map((r) => companyKey(r.name)))]);
+  const known = rows.length ? await companiesByLetters(userId) : new Map();
   summary.newSites = await addDiscoveredSites(
     userId,
-    rows.map((r) => ({ ...r, companyId: companyIds.get(companyKey(r.name)) ?? null })),
+    rows.map((r) => {
+      const company =
+        known.get(letters(companyKey(r.name))) ?? (r.boardToken ? known.get(letters(r.boardToken)) : undefined);
+      return company ? { ...r, name: company.name, companyId: company.id } : { ...r, companyId: null };
+    }),
   );
   return summary;
+}
+
+/** Discovery from the Company sites page: the whole plan in one go (SPEC §11.2). */
+export async function discoverCareerSites(
+  userId: string,
+  options: { runner?: WebSearchRunner; maxSearches?: number } = {},
+): Promise<DiscoverySummary> {
+  const queries = await planDiscovery(userId, options.maxSearches);
+  return runDiscoveryQueries(userId, queries, options.runner);
 }
 
 function siteRow(site: SiteRef, name: string, query: DiscoveryQuery): Omit<NewCareerSite, "source"> {

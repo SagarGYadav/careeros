@@ -32,7 +32,8 @@
     "eval:resume": "tsx --conditions=react-server scripts/eval-resume.ts",
     "search:live": "tsx --conditions=react-server scripts/search-live.ts",
     "eval:jobs": "tsx --conditions=react-server scripts/eval-jobs.ts",
-    "eval:fit": "tsx --conditions=react-server scripts/eval-fit.ts"
+    "eval:fit": "tsx --conditions=react-server scripts/eval-fit.ts",
+    "eval:deepsearch": "tsx --conditions=react-server scripts/eval-deepsearch.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.93",

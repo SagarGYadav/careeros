@@ -16,7 +16,7 @@ import { parseSalary } from "./salary";
 export const STALE_AFTER_DAYS = 30;
 
 export type PreparedJob = {
-  provider: NormalizedJob["provider"] | "manual";
+  provider: NormalizedJob["provider"] | "manual" | "company_site";
   externalId: string;
   title: string;
   companyName: string;
@@ -52,7 +52,10 @@ function salaryLine(description: string): string | null {
 }
 
 /** A job the user added (paste, URL or form) goes through the same cleaning as a search result. */
-export type IncomingJob = Omit<NormalizedJob, "provider"> & { provider: NormalizedJob["provider"] | "manual" };
+/** A job the user added, or one read from a company's own career site (deep search). */
+export type IncomingJob = Omit<NormalizedJob, "provider"> & {
+  provider: NormalizedJob["provider"] | "manual" | "company_site";
+};
 
 export function prepareJob(job: IncomingJob, now: Date): PreparedJob {
   const company = displayCompanyName(job.company);
@@ -103,11 +106,14 @@ export function prepareJob(job: IncomingJob, now: Date): PreparedJob {
     descriptionHash: descriptionHash(job.description),
     descriptionTruncated: job.descriptionTruncated,
     postedVia: job.postedVia,
-    isDirectFromCompany: isDirectFromCompany(
-      company,
-      job.postedVia,
-      job.applyLinks.map((l) => l.url),
-    ),
+    // A posting read from the company's own career site is direct by definition.
+    isDirectFromCompany:
+      job.provider === "company_site" ||
+      isDirectFromCompany(
+        company,
+        job.postedVia,
+        job.applyLinks.map((l) => l.url),
+      ),
     isStaffing: isStaffingAgency(job.company),
     applyLinks: job.applyLinks,
     postedAt,

@@ -19,23 +19,46 @@ async function post(url: string): Promise<RunProgress> {
 
 function steps(p: RunProgress): ProgressStep[] {
   const searching = p.stage === "search";
-  const order = ["search", "embed", "rank", "analyse", "done"];
+  const order = ["search", "discover", "sites", "embed", "rank", "analyse", "done"];
   const at = order.indexOf(p.stage);
-  const status = (index: number) =>
-    p.status === "failed" && index === at ? "error" : at > index ? "done" : at === index ? "running" : "pending";
+  const status = (stage: string) => {
+    const index = order.indexOf(stage);
+    return p.status === "failed" && index === at ? "error" : at > index ? "done" : at === index ? "running" : "pending";
+  };
+  const past = (stage: string) => at > order.indexOf(stage);
   return [
     {
       id: "search",
       label: "Search job sites",
-      status: status(0),
+      status: status("search"),
       detail: searching
         ? `Query ${Math.min(p.queriesDone + 1, p.queriesTotal)} of ${p.queriesTotal} · ${p.found} postings so far`
         : `${p.queriesTotal} queries · ${p.found} postings · ${p.newJobs} new · ${p.duplicates} duplicates merged`,
     },
     {
+      id: "discover",
+      label: "Find company career sites",
+      status: past("discover") && !p.discoveryTotal ? "skipped" : status("discover"),
+      detail: p.discoveryTotal
+        ? `${p.discoveryDone} of ${p.discoveryTotal} web searches · ${p.newSites} new sites`
+        : past("discover")
+          ? "Skipped: discovery is off or no web-search service is set up. Known sites are still read."
+          : undefined,
+    },
+    {
+      id: "sites",
+      label: "Read company career sites",
+      status: past("sites") && !p.sitesTotal ? "skipped" : status("sites"),
+      detail: p.sitesTotal
+        ? `${p.sitesRead} of ${p.sitesTotal} sites · ${p.siteJobs} matching jobs · ${p.newSiteJobs} new`
+        : past("sites")
+          ? "No company sites due for a check."
+          : undefined,
+    },
+    {
       id: "embed",
       label: "Compare descriptions with your profile",
-      status: p.embeddingsDeferred && at > 1 ? "skipped" : status(1),
+      status: p.embeddingsDeferred && past("embed") ? "skipped" : status("embed"),
       detail: p.embeddingsDeferred
         ? "Skipped for now: no embedding service available. Ranking used the other parts."
         : p.embedded
@@ -45,15 +68,15 @@ function steps(p: RunProgress): ProgressStep[] {
     {
       id: "rank",
       label: "Rank by relevance",
-      status: status(2),
+      status: status("rank"),
       detail: p.rankTotal ? `${Math.min(p.ranked, p.rankTotal)} of ${p.rankTotal} jobs` : undefined,
     },
     {
       id: "analyse",
       label: "Write Fit Reports for the top new matches",
-      status: status(3),
+      status: status("analyse"),
       detail:
-        at >= 3
+        at >= order.indexOf("analyse")
           ? p.analyseTotal
             ? `${Math.min(p.analysed, p.analyseTotal)} of ${p.analyseTotal} reports`
             : "No new matches to analyse"

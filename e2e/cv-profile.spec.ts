@@ -204,6 +204,8 @@ test.describe("signed in", () => {
     await page.goto("/jobs/roles");
     await page.getByRole("button", { name: "Find jobs" }).click();
     await expect(page.getByText("Search job sites")).toBeVisible();
+    // Deep search is part of every run; discovery is off in tests, so the steps say what happened.
+    await expect(page.getByText("Read company career sites")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Best matches from your last search" })).toBeVisible({
       timeout: 120_000,
     });

@@ -9,6 +9,8 @@ const SOURCE_LABELS: Record<string, string> = {
   adzuna: "Adzuna",
   jooble: "Jooble",
   serpapi: "Google Jobs",
+  company_site: "Company sites",
+  manual: "Added by you",
   mock: "Mock",
 };
 const SALARY_STEPS_LPA = [5, 10, 15, 20, 30, 40, 60];

@@ -19,7 +19,8 @@ export type AtsContext = {
   budget: { pages: number };
 };
 
-export type BoardRead = { postings: SitePosting[]; total: number };
+/** Matching postings, plus every title the board lists (for the registry's count and the §11.6 measurement). */
+export type BoardRead = { postings: SitePosting[]; total: number; titles: string[] };
 
 const date = (value: unknown): Date | null => {
   if (typeof value !== "string" && typeof value !== "number") return null;
@@ -62,7 +63,7 @@ async function greenhouse(token: string, company: string, ctx: AtsContext): Prom
       salaryText: null,
     }))
     .filter(ctx.want);
-  return { postings, total: jobs.length };
+  return { postings, total: jobs.length, titles: jobs.map((j) => j.title) };
 }
 
 async function lever(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -113,7 +114,7 @@ async function lever(token: string, company: string, ctx: AtsContext): Promise<B
       };
     })
     .filter(ctx.want);
-  return { postings, total: data.length };
+  return { postings, total: data.length, titles: data.map((p) => p.text) };
 }
 
 async function ashby(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -151,7 +152,7 @@ async function ashby(token: string, company: string, ctx: AtsContext): Promise<B
       salaryText: j.compensation?.compensationTierSummary ?? null,
     }))
     .filter(ctx.want);
-  return { postings, total: listed.length };
+  return { postings, total: listed.length, titles: listed.map((j) => j.title) };
 }
 
 async function smartrecruiters(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -209,7 +210,7 @@ async function smartrecruiters(token: string, company: string, ctx: AtsContext):
       salaryText: null,
     });
   }
-  return { postings, total: list.totalFound ?? items.length };
+  return { postings, total: list.totalFound ?? items.length, titles: items.map((i) => i.name) };
 }
 
 async function recruitee(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -251,7 +252,7 @@ async function recruitee(token: string, company: string, ctx: AtsContext): Promi
       };
     })
     .filter(ctx.want);
-  return { postings, total: offers.length };
+  return { postings, total: offers.length, titles: offers.map((o) => o.title) };
 }
 
 const ADAPTERS: Record<AtsKind, (token: string, company: string, ctx: AtsContext) => Promise<BoardRead>> = {

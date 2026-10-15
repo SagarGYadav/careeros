@@ -6,6 +6,7 @@ import { titleMatches, wantPosting, type PostingFilter, type SitePosting } from 
 import { readCareersPage, type PageRead } from "@/lib/careersites/reader";
 import { AppError, isAppError } from "@/lib/errors";
 import { fetchJson } from "@/lib/jobsearch/http";
+import { ProviderHttpError } from "@/lib/jobsearch/types";
 import { canonicalCity } from "@/lib/jobs/normalize";
 import { fetchPublicPage, type FetchDeps } from "@/lib/web/fetch-page";
 import { createHostThrottle, type HostThrottle } from "@/lib/web/links";
@@ -36,7 +37,7 @@ export async function readerContext(userId: string, now: Date) {
     remoteOk: (career?.workModes ?? []).includes("remote"),
     now,
   };
-  return { filter };
+  return { filter, roles: selected.map((r) => ({ id: r.id, title: r.title, titleVariants: r.titleVariants })) };
 }
 
 export type SiteReadResult = {
@@ -63,6 +64,8 @@ export async function readCareerSite(
   if (!site) throw new AppError("NOT_FOUND");
   if (!site.url || site.kind === "unknown")
     throw new AppError("VALIDATION", { message: "This site hasn't been found yet." });
+  // The known company's name ("Kestrel Pay"), so postings merge with the same job from job sites.
+  const company = site.company?.name ?? site.name;
   const filter = options.filter ?? (await readerContext(userId, now)).filter;
   const budget = options.budget ?? { pages: 20 };
   const deps = options.deps ?? {};
@@ -98,7 +101,7 @@ export async function readCareerSite(
         want: ctx.want,
         wantTitle: (title) => titleMatches(title, filter.titleVariants),
         budget,
-        company: site.name,
+        company,
       });
       if (page.embedded) {
         // The careers page embeds an ATS board: from now on the site is that board (or merges into it if known).
@@ -120,7 +123,7 @@ export async function readCareerSite(
       }
     }
     if (ats) {
-      const board = await readAtsBoard(ats.kind as AtsKind, ats.token!, site.name, ctx);
+      const board = await readAtsBoard(ats.kind as AtsKind, ats.token!, company, ctx);
       read = { postings: board.postings, total: board.total, method: "ats" };
     }
     const result = read!;
@@ -141,7 +144,8 @@ export async function readCareerSite(
     const robots = isAppError(error) && error.code === "FETCH_BLOCKED_BY_ROBOTS";
     const failures = site.failures + 1;
     const status = robots ? "blocked_by_robots" : failures >= FAILURES_BEFORE_FAILED ? "failed" : site.status;
-    const message = isAppError(error) ? error.message : "The site couldn't be read.";
+    const http = isProviderHttpError(error) ? `The site answered ${error.status}.` : null;
+    const message = isAppError(error) ? error.message : (http ?? "The site couldn't be read.");
     await updateCareerSite(userId, targetId, {
       status,
       lastFetchedAt: now,
@@ -150,7 +154,12 @@ export async function readCareerSite(
       failures,
       lastError: message.slice(0, 300),
     });
-    if (!isAppError(error)) console.error("career site read failed", error);
+    if (!isAppError(error) && !http) console.error("career site read failed", error);
     return { siteId: targetId, method: "none", postings: [], total: 0, status, error: message };
   }
+}
+
+/** Recognised by shape: the class can be loaded twice by bundlers and test runners. */
+function isProviderHttpError(error: unknown): error is ProviderHttpError {
+  return error instanceof ProviderHttpError || (error as { name?: string } | null)?.name === "ProviderHttpError";
 }

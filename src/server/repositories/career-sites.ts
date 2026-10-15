@@ -87,7 +87,7 @@ export async function companiesByKey(userId: string, keys: string[]) {
 }
 
 export async function getCareerSite(userId: string, id: string) {
-  return db.careerSite.findFirst({ where: { id, userId } });
+  return db.careerSite.findFirst({ where: { id, userId }, include: { company: { select: { name: true } } } });
 }
 
 /** Sites due for reading (never read, or past their next check), oldest first; unresolved and blocked ones wait. */
@@ -122,4 +122,10 @@ export async function updateCareerSite(
   },
 ) {
   await db.careerSite.updateMany({ where: { id, userId }, data });
+}
+
+/** Companies with their names, keyed by letters only ("kestrelpay"), to recognise a board token as a company. */
+export async function companiesByLetters(userId: string) {
+  const rows = await db.company.findMany({ where: { userId }, select: { id: true, name: true, normalizedName: true } });
+  return new Map(rows.map((r) => [r.normalizedName.replace(/[^a-z0-9]/g, ""), { id: r.id, name: r.name }]));
 }

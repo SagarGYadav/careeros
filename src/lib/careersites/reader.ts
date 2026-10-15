@@ -32,6 +32,8 @@ export type PageRead = {
   postings: SitePosting[];
   /** Jobs the page lists (all of them, before the filters). */
   total: number;
+  /** Every job title the page lists (before the filters). */
+  titles: string[];
 };
 
 const PAGE_TEXT_LIMIT = 12_000;
@@ -105,7 +107,8 @@ export async function readCareersPage(url: string, ctx: PageReadContext): Promis
 
   for (const candidate of extractEmbedUrls(page.html, page.url)) {
     const site = detectSite(candidate);
-    if (site && site.kind !== "html") return { method: "embedded_ats", embedded: site, postings: [], total: 0 };
+    if (site && site.kind !== "html")
+      return { method: "embedded_ats", embedded: site, postings: [], total: 0, titles: [] };
   }
 
   const onPage = extractJobPostings(page.html);
@@ -115,6 +118,7 @@ export async function readCareersPage(url: string, ctx: PageReadContext): Promis
       embedded: null,
       postings: onPage.map((job, i) => fromJsonLd(job, page.url, ctx.company, i)).filter(ctx.want),
       total: onPage.length,
+      titles: onPage.map((job) => job.title),
     };
   }
 
@@ -125,7 +129,13 @@ export async function readCareersPage(url: string, ctx: PageReadContext): Promis
     const wanted = jobLinks.filter((l) => ctx.wantTitle(l.text)).map((l) => ({ title: l.text, url: l.url }));
     const postings = await readJobPages(wanted, ctx, false);
     if (postings.length || !wanted.length) {
-      return { method: "jsonld_pages", embedded: null, postings, total: jobLinks.length };
+      return {
+        method: "jsonld_pages",
+        embedded: null,
+        postings,
+        total: jobLinks.length,
+        titles: jobLinks.map((l) => l.text),
+      };
     }
   }
 
@@ -135,11 +145,11 @@ export async function readCareersPage(url: string, ctx: PageReadContext): Promis
   const text = normalizeForMatch(pageText);
   const known = new Set(links.map((l) => l.url));
   const real = listed.filter((job) => text.includes(normalizeForMatch(job.title)) && known.has(job.url));
-  if (!real.length) return { method: "none", embedded: null, postings: [], total: 0 };
+  if (!real.length) return { method: "none", embedded: null, postings: [], total: 0, titles: [] };
   const postings = await readJobPages(
     real.filter((job) => ctx.wantTitle(job.title)),
     ctx,
     true,
   );
-  return { method: "ai_links", embedded: null, postings, total: real.length };
+  return { method: "ai_links", embedded: null, postings, total: real.length, titles: real.map((j) => j.title) };
 }

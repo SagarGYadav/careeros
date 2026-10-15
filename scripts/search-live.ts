@@ -3,6 +3,7 @@
 //
 //   npm run search:live               Adzuna forced to fail (the acceptance run)
 //   npm run search:live -- --no-fail  every provider answers normally
+//   npm run search:live -- --deep     also deep search: discover and read company career sites (needs web-search keys)
 //
 // AI runs on the mock (the CV is a fixture), so no AI quota is used. One role in one city keeps the run to a few
 // requests of each free quota. Prints counts and public job titles only; the fictional user is deleted afterwards.
@@ -12,6 +13,9 @@ import { readFile } from "node:fs/promises";
 
 process.env.AI_PROVIDERS = "mock";
 const forceFail = !process.argv.includes("--no-fail");
+// --deep: also discover and read company career sites (SPEC §11), with the real web-search chain from .env.
+const deep = process.argv.includes("--deep");
+if (deep) process.env.DEEP_SEARCH_ENABLED = "true";
 
 // Answer every Adzuna request with "429 Too Many Requests" (rest 60 s), as Adzuna does when its limit is reached.
 const realFetch = globalThis.fetch;
@@ -58,6 +62,14 @@ async function main() {
     });
 
     const started = Date.now();
+    if (deep) {
+      const { loadWebSearchProviders } = await import("@/server/websearch/runner");
+      const { providers } = await loadWebSearchProviders();
+      if (!providers.some((p) => p.configured && !p.isMock)) {
+        console.log("--deep needs a real web-search provider: set WEB_SEARCH_PROVIDERS and its key in .env.");
+        return;
+      }
+    }
     let progress = await startSearchRun(user.id);
     let calls = 1;
     while (progress.status === "running") {
@@ -82,6 +94,14 @@ async function main() {
       `  embeddings        ${models.map((m) => `${m.embeddingModel ?? "none"} ${m._count._all}`).join(" · ")}`,
     );
     console.log(`  feed              ${JSON.stringify(feed.counts)}`);
+    if (deep) {
+      console.log(
+        `  deep search       ${progress.discoveryDone} web searches · ${progress.newSites} new sites · ${progress.sitesRead} sites read · ${progress.siteJobs} matching jobs · ${progress.newSiteJobs} new`,
+      );
+      const direct = await db.job.count({ where: { userId: user.id, isDirectFromCompany: true } });
+      const directOnly = await db.job.count({ where: { userId: user.id, provider: "company_site" } });
+      console.log(`  direct jobs       ${direct} direct from a company site · ${directOnly} found only there`);
+    }
     console.log(`  run notes         ${JSON.stringify(run.errors)}`);
     console.log("  top matches");
     for (const card of feed.cards.slice(0, 5)) {

@@ -5,11 +5,11 @@ import { AppError, isAppError } from "@/lib/errors";
 import { isSameJob, mergeApplyLinks, preferDescription, type DedupeKey } from "@/lib/jobs/dedupe";
 import { canonicalCity } from "@/lib/jobs/normalize";
 import { buildSearchPlan, type PlannedQuery } from "@/lib/jobs/plan";
-import { prepareJob, type PreparedJob } from "@/lib/jobs/prepare";
+import { prepareJob, type IncomingJob, type PreparedJob } from "@/lib/jobs/prepare";
 import { scoreJob, type RankingProfile } from "@/lib/jobs/relevance";
 import { readConditions } from "@/lib/jobs/conditions";
 import { storedDealbreakersSchema } from "@/lib/validation/profile";
-import type { ApplyLink, JobSearchParams, NormalizedJob } from "@/lib/jobsearch/types";
+import type { ApplyLink, JobSearchParams } from "@/lib/jobsearch/types";
 import { embeddings, loadEmbeddingProviders } from "@/server/embeddings/runner";
 import { jobSearch } from "@/server/jobsearch/runner";
 import {
@@ -38,6 +38,13 @@ import {
 import { formatSalaryRange } from "@/lib/format";
 import { listSkillCatalogue, listSkillImplicationIds, listUserSkills } from "@/server/repositories/skills";
 import { listTargetRoles, saveRoleMarketStats } from "@/server/repositories/target-roles";
+import type { DiscoveryQuery } from "@/lib/careersites/discovery";
+import { postingToJob, rolesForTitle } from "@/lib/careersites/to-job";
+import type { WebSearchRunner } from "@/lib/websearch/runner";
+import { getCareerSite, listDueSites } from "@/server/repositories/career-sites";
+import { loadWebSearchProviders } from "@/server/websearch/runner";
+import { readCareerSite, readerContext, type ReaderDeps } from "./career-site-reader";
+import { planDiscovery, runDiscoveryQueries } from "./career-sites";
 import { generateFitReport } from "./fit-report";
 import {
   getProfileEmbeddingInfo,
@@ -67,9 +74,14 @@ const RANK_PAGE = 200;
  * report uses two or three AI requests and Gemini Flash's free tier allows about 20 a day. The rest: "Analyse".
  */
 const ANALYSE_TOP_N = () => num(process.env.JOB_DEEP_ANALYSIS_TOP_N, 5);
+/** Deep search (SPEC §11.4): page fetches per run, and how many due career sites one run reads at most. */
+const DEEP_MAX_PAGES = () => num(process.env.DEEP_SEARCH_MAX_PAGES_PER_RUN, 60);
+const DEEP_MAX_SITES = 25;
+/** Discovering new sites spends web-search quota, so it runs only when switched on; reading known sites is free. */
+const DISCOVERY_ENABLED = () => process.env.DEEP_SEARCH_ENABLED === "true";
 
 const stateSchema = z.object({
-  stage: z.enum(["search", "embed", "rank", "analyse", "done"]),
+  stage: z.enum(["search", "discover", "sites", "embed", "rank", "analyse", "done"]),
   queryIndex: z.number().int(),
   embedded: z.number().int(),
   embeddingsDeferred: z.boolean(),
@@ -79,6 +91,16 @@ const stateSchema = z.object({
   // Added with Fit Reports; runs saved before have none.
   analyseQueue: z.array(z.string()).default([]),
   analysed: z.number().int().default(0),
+  // Added with deep search (SPEC §11.5).
+  discoveryPlanned: z.boolean().default(false),
+  discoveryQueries: z.array(z.custom<DiscoveryQuery>()).default([]),
+  discoveryIndex: z.number().int().default(0),
+  siteQueue: z.array(z.string()).nullable().default(null),
+  siteIndex: z.number().int().default(0),
+  pagesLeft: z.number().int().nullable().default(null),
+  deep: z
+    .object({ newSites: z.number().int(), siteJobs: z.number().int(), newSiteJobs: z.number().int() })
+    .default({ newSites: 0, siteJobs: 0, newSiteJobs: 0 }),
 });
 type RunState = z.infer<typeof stateSchema>;
 const planSchema = z.object({
@@ -103,6 +125,14 @@ export type RunProgress = {
   /** Fit Reports written for the run's top new matches, of how many. */
   analysed: number;
   analyseTotal: number;
+  /** Deep search: discovery searches done of planned, company sites read of due, jobs they had and how many new. */
+  discoveryDone: number;
+  discoveryTotal: number;
+  newSites: number;
+  sitesRead: number;
+  sitesTotal: number;
+  siteJobs: number;
+  newSiteJobs: number;
   errors: string[];
 };
 
@@ -126,6 +156,13 @@ function progressOf(run: RunRow): RunProgress {
     rankTotal: state.rankTotal,
     analysed: state.analysed,
     analyseTotal: state.analyseQueue.length,
+    discoveryDone: Math.min(state.discoveryIndex, state.discoveryQueries.length),
+    discoveryTotal: state.discoveryQueries.length,
+    newSites: state.deep.newSites,
+    sitesRead: Math.min(state.siteIndex, state.siteQueue?.length ?? 0),
+    sitesTotal: state.siteQueue?.length ?? 0,
+    siteJobs: state.deep.siteJobs,
+    newSiteJobs: state.deep.newSiteJobs,
     errors: z
       .array(z.object({ message: z.string() }))
       .catch([])
@@ -165,6 +202,13 @@ export async function startSearchRun(userId: string): Promise<RunProgress> {
     rankTotal: 0,
     analyseQueue: [],
     analysed: 0,
+    discoveryPlanned: false,
+    discoveryQueries: [],
+    discoveryIndex: 0,
+    siteQueue: null,
+    siteIndex: 0,
+    pagesLeft: null,
+    deep: { newSites: 0, siteJobs: 0, newSiteJobs: 0 },
   };
   const run = await createSearchRun(userId, {
     targetRoleIds: selected.map((r) => r.id),
@@ -199,7 +243,7 @@ export const linksOf = (value: unknown): ApplyLink[] =>
 async function saveResults(
   userId: string,
   runId: string,
-  jobs: NormalizedJob[],
+  jobs: IncomingJob[],
   roleIds: string[],
   now: Date,
 ): Promise<Counters> {
@@ -254,7 +298,11 @@ async function saveResults(
     if (existing) {
       const sameListing = existing.provider === job.provider && existing.externalId === job.externalId;
       if (!sameListing) duplicates++;
-      const links = mergeApplyLinks(linksOf(existing.applyLinks), job.applyLinks);
+      // The company's own page becomes the primary apply link (SPEC §11.3).
+      const links =
+        job.provider === "company_site"
+          ? mergeApplyLinks(job.applyLinks, linksOf(existing.applyLinks))
+          : mergeApplyLinks(linksOf(existing.applyLinks), job.applyLinks);
       const roles = [...new Set([...existing.targetRoleIds, ...roleIds])];
       const fuller =
         preferDescription(
@@ -304,7 +352,7 @@ async function saveResults(
       descriptionRaw: job.description,
       descriptionHash: job.descriptionHash,
       descriptionTruncated: job.descriptionTruncated,
-      origin: "search",
+      origin: job.provider === "company_site" ? "deep_search" : "search",
       provider: job.provider,
       externalId: job.externalId,
       postedVia: job.postedVia,
@@ -479,7 +527,18 @@ async function profileText(userId: string): Promise<string> {
 // ---------------------------------------------------------------------------------------------------------------
 
 /** Does up to STEP_BUDGET_MS of work on a run and saves where it stopped. */
-export async function advanceSearchRun(userId: string, runId: string): Promise<RunProgress> {
+/** Test seams for deep search: a fixture web for site reading, and a web-search runner (the mock in tests). */
+export type AdvanceOptions = {
+  readerDeps?: ReaderDeps;
+  webSearchRunner?: WebSearchRunner;
+  allowMockDiscovery?: boolean;
+};
+
+export async function advanceSearchRun(
+  userId: string,
+  runId: string,
+  options: AdvanceOptions = {},
+): Promise<RunProgress> {
   const run = await getSearchRun(userId, runId);
   if (!run) throw new AppError("NOT_FOUND");
   if (run.status !== "running") return progressOf(run);
@@ -503,13 +562,14 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
   const note = (message: string) => errors.push({ at: new Date().toISOString(), message });
   let ranking: RankingContext | null = null;
   let reportsThisCall = 0;
+  let reader: Awaited<ReturnType<typeof readerContext>> | null = null;
 
   try {
     while (timeLeft() && state.stage !== "done") {
       if (state.stage === "search") {
         const query = queries[state.queryIndex];
         if (!query) {
-          state.stage = "embed";
+          state.stage = "discover";
           continue;
         }
         const params: JobSearchParams = {
@@ -553,6 +613,79 @@ export async function advanceSearchRun(userId: string, runId: string): Promise<R
           }
         }
         state.queryIndex++;
+        continue;
+      }
+
+      if (state.stage === "discover") {
+        // Find new company career sites (SPEC §11.2), one web search per loop so the step budget holds.
+        if (!state.discoveryPlanned) {
+          state.discoveryPlanned = true;
+          const allowed = DISCOVERY_ENABLED() && (options.allowMockDiscovery || (await hasRealWebSearch()));
+          if (allowed) {
+            try {
+              state.discoveryQueries = await planDiscovery(userId);
+            } catch (error) {
+              if (!isAppError(error)) throw error; // no selected role: nothing to discover for
+            }
+          }
+          continue;
+        }
+        const query = state.discoveryQueries[state.discoveryIndex];
+        if (!query) {
+          state.stage = "sites";
+          continue;
+        }
+        const found = await runDiscoveryQueries(userId, [query], options.webSearchRunner);
+        state.discoveryIndex++;
+        state.deep.newSites += found.newSites + found.resolvedWatchlist;
+        for (const [provider, count] of Object.entries(found.providers)) {
+          requests[`web:${provider}`] = (requests[`web:${provider}`] ?? 0) + count;
+        }
+        if (found.stoppedBecause) {
+          note(found.stoppedBecause);
+          state.discoveryIndex = state.discoveryQueries.length;
+        }
+        continue;
+      }
+
+      if (state.stage === "sites") {
+        // Read the company career sites that are due (SPEC §11.3), one per loop, within the run's page budget.
+        if (state.siteQueue === null) {
+          state.siteQueue = (await listDueSites(userId, now, DEEP_MAX_SITES)).map((s) => s.id);
+          state.pagesLeft = DEEP_MAX_PAGES();
+          continue;
+        }
+        const siteId = state.siteQueue[state.siteIndex];
+        if (!siteId || (state.pagesLeft ?? 0) <= 0) {
+          state.stage = "embed";
+          continue;
+        }
+        reader ??= await readerContext(userId, now);
+        const budget = { pages: state.pagesLeft ?? 0 };
+        const read = await readCareerSite(userId, siteId, {
+          now,
+          budget,
+          filter: reader.filter,
+          deps: options.readerDeps,
+        });
+        state.pagesLeft = budget.pages;
+        state.siteIndex++;
+        if (read.postings.length) {
+          const site = await getCareerSite(userId, read.siteId);
+          const groups = new Map<string, IncomingJob[]>();
+          for (const posting of read.postings) {
+            const roleIds = rolesForTitle(posting.title, reader.roles).join(",");
+            groups.set(roleIds, [...(groups.get(roleIds) ?? []), postingToJob(site?.key ?? siteId, posting)]);
+          }
+          for (const [roleIds, jobs] of groups) {
+            const saved = await saveResults(userId, runId, jobs, roleIds ? roleIds.split(",") : [], now);
+            counters.found += saved.found;
+            counters.newJobs += saved.newJobs;
+            counters.duplicates += saved.duplicates;
+            state.deep.siteJobs += saved.found;
+            state.deep.newSiteJobs += saved.newJobs;
+          }
+        }
         continue;
       }
 
@@ -730,4 +863,10 @@ export async function refreshRoleMarketStats(userId: string, now = new Date()) {
     };
   });
   await saveRoleMarketStats(userId, rows);
+}
+
+/** True when a real (not mock) web-search provider is set up and switched on; discovery needs one. */
+async function hasRealWebSearch(): Promise<boolean> {
+  const { providers, disabled } = await loadWebSearchProviders();
+  return providers.some((p) => p.configured && !p.isMock && !disabled.has(p.name));
 }

@@ -3,6 +3,8 @@ import { readAtsBoard, type AtsContext } from "@/lib/careersites/adapters";
 import type { AtsKind } from "@/lib/careersites/ats";
 import { locationMatches, titleMatches, wantPosting } from "@/lib/careersites/postings";
 import { readCareersPage } from "@/lib/careersites/reader";
+import { postingToJob, rolesForTitle } from "@/lib/careersites/to-job";
+import { prepareJob } from "@/lib/jobs/prepare";
 import { fetchJson } from "@/lib/jobsearch/http";
 import { fetchPublicPage } from "@/lib/web/fetch-page";
 import { decodeEntities } from "@/lib/web/jsonld";
@@ -165,5 +167,47 @@ describe("page helpers", () => {
     await wait("https://b.example/1");
     await wait("https://a.example/3");
     expect(waits).toEqual([1_000, 1_000]);
+  });
+});
+
+describe("company-site postings as pipeline jobs", () => {
+  const posting = {
+    externalId: "4012001",
+    title: "Senior Frontend Engineer",
+    company: "Kestrel Pay",
+    location: "Bengaluru, India",
+    description: "Build fast web apps in React. 3+ years.",
+    url: "https://boards.greenhouse.io/kestrelpay/jobs/4012001",
+    applyUrl: null,
+    postedAt: new Date("2026-10-05"),
+    employmentType: null,
+    workModeHint: null,
+    salaryText: null,
+  };
+
+  it("become direct-from-company jobs with the company's page as the apply link", () => {
+    const job = postingToJob("greenhouse:kestrelpay", posting);
+    expect(job).toMatchObject({
+      provider: "company_site",
+      externalId: "greenhouse:kestrelpay:4012001",
+      postedVia: "Kestrel Pay careers site",
+      applyLinks: [{ site: "Kestrel Pay careers", url: posting.url }],
+    });
+    const prepared = prepareJob(job, new Date("2026-10-15"));
+    expect(prepared).toMatchObject({
+      isDirectFromCompany: true,
+      city: "Bengaluru",
+      companyName: "Kestrel Pay",
+    });
+    expect(prepared.expMinYears).toBe(3);
+  });
+
+  it("belong to the target roles whose titles they match (all selected roles when none does)", () => {
+    const roles = [
+      { id: "fe", title: "Frontend Developer", titleVariants: ["Frontend Engineer"] },
+      { id: "be", title: "Backend Developer", titleVariants: ["Backend Engineer"] },
+    ];
+    expect(rolesForTitle("Senior Frontend Engineer", roles)).toEqual(["fe"]);
+    expect(rolesForTitle("Product Designer", roles)).toEqual(["fe", "be"]);
   });
 });

@@ -63,8 +63,13 @@ test.describe("signed in", () => {
   });
 
   test("the command palette navigates with the keyboard", async ({ page }) => {
-    await page.keyboard.press("Control+k");
-    await page.getByPlaceholder("Type a command or search…").fill("settings");
+    // The shortcut works once the page's scripts have loaded; on a slow machine the first press can come too early.
+    const search = page.getByPlaceholder("Type a command or search…");
+    await expect(async () => {
+      await page.keyboard.press("Control+k");
+      await expect(search).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await search.fill("settings");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByText(user.email).first()).toBeVisible();

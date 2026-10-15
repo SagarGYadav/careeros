@@ -6,6 +6,11 @@ export const E2E_EMAIL_DOMAIN = "@e2e.careeros.test";
 
 /** Fails on serious or critical WCAG 2.2 A/AA violations (SPEC §21 accessibility). */
 export async function expectNoSeriousA11yViolations(page: Page) {
+  // Measure the settled page: an element caught mid-fade (a toast, a row being removed) has lower contrast for a
+  // moment, which made this check flaky on slower CI machines.
+  await page.addStyleTag({
+    content: "*, *::before, *::after { transition: none !important; animation: none !important; }",
+  });
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();

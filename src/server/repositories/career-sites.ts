@@ -85,3 +85,41 @@ export async function companiesByKey(userId: string, keys: string[]) {
   });
   return new Map(rows.map((r) => [r.normalizedName, r.id]));
 }
+
+export async function getCareerSite(userId: string, id: string) {
+  return db.careerSite.findFirst({ where: { id, userId } });
+}
+
+/** Sites due for reading (never read, or past their next check), oldest first; unresolved and blocked ones wait. */
+export async function listDueSites(userId: string, now: Date, take: number) {
+  return db.careerSite.findMany({
+    where: {
+      userId,
+      status: { in: ["active", "no_relevant_jobs", "failed"] },
+      OR: [{ nextCheckAt: null }, { nextCheckAt: { lte: now } }],
+    },
+    orderBy: [{ lastFetchedAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+    take,
+  });
+}
+
+export async function updateCareerSite(
+  userId: string,
+  id: string,
+  data: {
+    status?: string;
+    lastFetchedAt?: Date;
+    nextCheckAt?: Date;
+    lastJobCount?: number;
+    relevantJobCount?: number;
+    emptyRuns?: number;
+    failures?: number;
+    lastError?: string | null;
+    kind?: string;
+    boardToken?: string | null;
+    url?: string | null;
+    key?: string;
+  },
+) {
+  await db.careerSite.updateMany({ where: { id, userId }, data });
+}

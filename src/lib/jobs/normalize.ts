@@ -52,6 +52,21 @@ export function canonicalCity(location: string | null | undefined): string | nul
   return first.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** The canonical Indian city a location names (from the alias list only), or null for anywhere else. */
+export function indianCity(location: string | null | undefined): string | null {
+  if (!location?.trim()) return null;
+  for (const part of location.split(/[,(/|;·]/)) {
+    // "Location: Bengaluru" → "bengaluru"; the country itself is not a city.
+    const text = normalizeForMatch(part)
+      .replace(/^[a-z ]{2,20}:\s*/, "")
+      .trim();
+    for (const [pattern, city] of CITY_ALIASES) {
+      if (pattern.test(text) && city !== "Remote-India" && city !== "India") return city;
+    }
+  }
+  return null;
+}
+
 export function detectWorkMode(
   location: string,
   description: string,

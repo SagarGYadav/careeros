@@ -98,6 +98,7 @@ describe("JobPosting JSON-LD", () => {
       employmentType: "full_time",
       remote: false,
       postedAt: new Date("2026-10-01"),
+      url: null,
     });
     expect(extractJobPosting("<html>no data</html>")).toBeNull();
   });

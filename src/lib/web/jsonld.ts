@@ -11,9 +11,22 @@ export type JsonLdJob = {
   employmentType: string | null;
   remote: boolean;
   postedAt: Date | null;
+  /** The posting's own page, when the data names one. */
+  url: string | null;
 };
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " };
+
+/** Decodes HTML entities ("&lt;p&gt;" → "<p>"), for APIs that send entity-encoded HTML (Greenhouse). */
+export function decodeEntities(text: string): string {
+  return text.replace(/&(#?\w+);/g, (m, name: string) =>
+    name.toLowerCase() in ENTITIES
+      ? ENTITIES[name.toLowerCase()]
+      : name.startsWith("#")
+        ? String.fromCharCode(name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : Number(name.slice(1)))
+        : m,
+  );
+}
 
 /** HTML → readable text with line breaks kept for paragraphs and list items. */
 export function htmlToText(html: string): string {
@@ -84,7 +97,9 @@ function salaryOf(node: Node): string | null {
 }
 
 /** The first JobPosting in the page's JSON-LD blocks, or null. Invalid JSON blocks are skipped. */
-export function extractJobPosting(html: string): JsonLdJob | null {
+/** Every JobPosting in the page's JSON-LD blocks (a careers page may list several). Invalid blocks are skipped. */
+export function extractJobPostings(html: string): JsonLdJob[] {
+  const postings: JsonLdJob[] = [];
   const blocks = html.matchAll(/<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   for (const [, body] of blocks) {
     let data: unknown;
@@ -101,7 +116,7 @@ export function extractJobPosting(html: string): JsonLdJob | null {
       const org = node.hiringOrganization as Node | string | undefined;
       const posted = str(node.datePosted);
       const postedAt = posted ? new Date(posted) : null;
-      return {
+      postings.push({
         title: htmlToText(title),
         company: (typeof org === "string" ? org : str(org?.name)) ?? "",
         location: locationOf(node),
@@ -114,8 +129,14 @@ export function extractJobPosting(html: string): JsonLdJob | null {
             .toLowerCase() || null,
         remote: asArray(node.jobLocationType).some((t) => String(t).toUpperCase() === "TELECOMMUTE"),
         postedAt: postedAt && !Number.isNaN(postedAt.getTime()) ? postedAt : null,
-      };
+        url: str(node.url),
+      });
     }
   }
-  return null;
+  return postings;
+}
+
+/** The first JobPosting on the page, or null. */
+export function extractJobPosting(html: string): JsonLdJob | null {
+  return extractJobPostings(html)[0] ?? null;
 }

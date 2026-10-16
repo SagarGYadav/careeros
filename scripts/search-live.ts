@@ -101,6 +101,23 @@ async function main() {
       const direct = await db.job.count({ where: { userId: user.id, isDirectFromCompany: true } });
       const directOnly = await db.job.count({ where: { userId: user.id, provider: "company_site" } });
       console.log(`  direct jobs       ${direct} direct from a company site · ${directOnly} found only there`);
+      // Why sites gave few jobs: counts by type and outcome, and the kinds of error (no site names or links).
+      const sites = await db.careerSite.findMany({
+        where: { userId: user.id },
+        select: { kind: true, status: true, lastFetchedAt: true, lastJobCount: true, lastError: true },
+      });
+      const tally = (keys: string[]) =>
+        Object.fromEntries(
+          [...new Set(keys)].map((k) => [k, keys.filter((x) => x === k).length] as const).sort((a, b) => b[1] - a[1]),
+        );
+      const read = sites.filter((s) => s.lastFetchedAt);
+      console.log(`  sites found       ${JSON.stringify(tally(sites.map((s) => s.kind)))}`);
+      console.log(`  sites read        ${JSON.stringify(tally(read.map((s) => `${s.kind}:${s.status}`)))}`);
+      console.log(
+        `  jobs on them      ${read.reduce((n, s) => n + s.lastJobCount, 0)} openings in all, before the role/place/age filter`,
+      );
+      const errors = read.filter((s) => s.lastError).map((s) => s.lastError!.replace(/https?:\/\/\S+/g, "<url>"));
+      console.log(`  site errors       ${JSON.stringify(tally(errors.map((e) => e.slice(0, 60))))}`);
     }
     console.log(`  run notes         ${JSON.stringify(run.errors)}`);
     console.log("  top matches");

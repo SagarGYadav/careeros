@@ -7,6 +7,7 @@ import { AlertTriangle, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ApplicationPanel } from "@/features/applications/application-panel";
 import { AnalyseButton } from "@/features/fit-report/analyse-button";
 import { DescriptionTools } from "@/features/fit-report/description-tools";
 import { FitReportView } from "@/features/fit-report/fit-report";
@@ -16,6 +17,7 @@ import { isAppError } from "@/lib/errors";
 import { formatRelative } from "@/lib/format";
 import { fitReportToText } from "@/lib/fit-report/plain-text";
 import { getCurrentUser } from "@/server/auth/session";
+import { getApplicationPanel, type ApplicationPanelView } from "@/server/services/applications";
 import { getJobView, type JobView } from "@/server/services/job-view";
 
 export const metadata: Metadata = { title: "Job" };
@@ -79,8 +81,9 @@ async function Job({ params }: { params: Promise<{ jobId: string }> }) {
   await connection();
   const [user, { jobId }] = await Promise.all([getCurrentUser(), params]);
   let view: JobView;
+  let panel: ApplicationPanelView;
   try {
-    view = await getJobView(user.id, jobId);
+    [view, panel] = await Promise.all([getJobView(user.id, jobId), getApplicationPanel(user.id, jobId)]);
   } catch (error) {
     if (isAppError(error) && error.code === "NOT_FOUND") notFound();
     throw error;
@@ -134,6 +137,7 @@ async function Job({ params }: { params: Promise<{ jobId: string }> }) {
           ))}
         </div>
       )}
+      <ApplicationPanel jobId={job.id} panel={panel} />
       {job.notFitReasons.length > 0 && (
         <p className="flex gap-1.5 text-sm text-warning">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

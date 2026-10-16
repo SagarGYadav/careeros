@@ -46,6 +46,9 @@ model User {
   scoringConfigs  ScoringConfig[]
   jobAnalyses     JobAnalysis[]
   careerSites     CareerSite[]
+  applications    Application[]
+  appEvents       ApplicationEvent[]
+  interviewRounds InterviewRound[]
 
   @@map("users")
 }
@@ -522,6 +525,7 @@ model ResumeVersion {
   injectionSuspected Boolean         @default(false)
   confirmedAt        DateTime?
   analyses           JobAnalysis[]
+  applications       Application[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -659,6 +663,7 @@ model Job {
   injectionSuspected      Boolean                     @default(false)
   requirements            JobRequirement[]
   analyses                JobAnalysis[]
+  application             Application?
   createdAt               DateTime                    @default(now())
   updatedAt               DateTime                    @updatedAt
 
@@ -816,4 +821,97 @@ model CareerSite {
   @@unique([userId, key])
   @@index([userId, status, nextCheckAt])
   @@map("career_sites")
+}
+
+/// An application the user made (SPEC §13). Created by "Mark as applied"; the job and its Fit Report are frozen in
+/// jobSnapshot, so the record keeps what the user applied to even if the posting changes or disappears.
+model Application {
+  id              String             @id @default(cuid())
+  userId          String
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// One application per job. Kept (job set to null) if the job is ever deleted.
+  jobId           String?            @unique
+  job             Job?               @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  /// APPLIED | RECRUITER_CONTACT | ASSESSMENT | INTERVIEW | FINAL_ROUND | OFFER | REJECTED | WITHDRAWN | GHOSTED
+  status          String
+  /// Highest stage ever recorded (APPLIED 1 … OFFER 6); funnel metrics use it, never the current status (SPEC §5).
+  stageReached    Int
+  appliedAt       DateTime
+  /// Set when the application ends (rejected, withdrawn, ghosted); cleared if it is reopened.
+  closedAt        DateTime?
+  resumeVersionId String?
+  resumeVersion   ResumeVersion?     @relation(fields: [resumeVersionId], references: [id], onDelete: SetNull)
+  /// company_site | linkedin | naukri | indeed | other_job_site | recruiter | email | other
+  source          String
+  isReferral      Boolean            @default(false)
+  referrerName    String?
+  /// outbound (the user applied) | inbound (a recruiter reached out first; excluded from outbound rates)
+  direction       String             @default("outbound")
+  followUpAt      DateTime?
+  /// pending | accepted | declined, once there is an offer
+  offerDecision   String?
+  rejectionReason String?
+  /// The stage the application had reached when it was rejected (APPLIED … OFFER).
+  rejectedAtStage String?
+  /// The job and its Fit Report when the user applied: { version, job, requirements, fit }
+  jobSnapshot     Json
+  lastActivityAt  DateTime
+  notes           String?
+  events          ApplicationEvent[]
+  rounds          InterviewRound[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, appliedAt])
+  @@map("applications")
+}
+
+/// The application's timeline (SPEC §13): every status change, round and note, oldest first.
+model ApplicationEvent {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// applied | status_change | round_added | note
+  type          String
+  fromStatus    String?
+  toStatus      String?
+  /// When it happened (the user may log something that happened earlier), not when it was recorded.
+  occurredAt    DateTime
+  title         String
+  note          String?
+  /// user | system
+  createdBy     String      @default("user")
+  /// The application's fields before a status change, so the change can be undone exactly.
+  previous      Json?
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId, occurredAt])
+  @@map("application_events")
+}
+
+/// One interview round (SPEC §18): logged in Phase 6, used by interview prep and analytics later.
+model InterviewRound {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// recruiter_screen | technical | coding | system_design | take_home | hiring_manager | behavioural | hr | final | other
+  roundType      String
+  scheduledAt    DateTime?
+  /// pending | passed | failed | cancelled
+  result         String      @default("pending")
+  /// 1–5, how the user felt it went
+  selfRating     Int?
+  topicSkillIds  String[]
+  questionsAsked String[]
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([applicationId, scheduledAt])
+  @@map("interview_rounds")
 }

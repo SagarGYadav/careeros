@@ -16,7 +16,13 @@ export async function expectNoSeriousA11yViolations(page: Page) {
     .analyze();
   const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(
-    serious.map((v) => `${v.id}: ${v.help} (${v.nodes.length} element(s))`),
+    serious.map(
+      (v) =>
+        `${v.id}: ${v.help} (${v.nodes.length} element(s): ${v.nodes
+          .slice(0, 3)
+          .map((n) => `${n.target.join(" ")} ${n.failureSummary?.split("\n").pop()?.trim() ?? ""}`)
+          .join("; ")})`,
+    ),
     "accessibility violations",
   ).toEqual([]);
 }

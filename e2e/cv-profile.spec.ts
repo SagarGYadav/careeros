@@ -361,6 +361,44 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "fit-report");
   });
+  test("a job is marked as applied, moved to Interview with a round, and rejected with a reason", async ({ page }) => {
+    await page.goto("/jobs");
+    await page
+      .getByRole("link", { name: /^Fit \d+/ })
+      .first()
+      .click();
+    const application = page.getByRole("region", { name: "Application" });
+    await expect(application.getByRole("button", { name: "Mark as applied" })).toBeVisible();
+
+    await application.getByRole("button", { name: "Mark as applied" }).click();
+    const dialog = page.getByRole("dialog", { name: "Mark as applied" });
+    await expect(dialog.getByLabel("CV version sent")).toHaveValue(/.+/);
+    await dialog.getByLabel("Someone referred me").check();
+    await dialog.getByLabel("Referred by (optional)").fill("A. Friend");
+    await dialog.getByRole("button", { name: "Mark as applied" }).click();
+    await expect(page.getByText(/^Marked as applied/)).toBeVisible();
+    await expect(application.getByText("Applied with a referral from A. Friend")).toBeVisible();
+
+    await application.getByLabel("Change status").selectOption("INTERVIEW");
+    await page.getByRole("dialog", { name: "Move to Interview" }).getByRole("button", { name: "Save" }).click();
+    const round = page.getByRole("dialog", { name: "Add the interview round?" });
+    await expect(round).toBeVisible();
+    await round.getByLabel("Round type").selectOption("coding");
+    await round.getByRole("button", { name: "Add round" }).click();
+    await expect(page.getByText("Coding round added.")).toBeVisible();
+    await expect(application.getByText("Interview", { exact: true })).toBeVisible();
+
+    await application.getByLabel("Change status").selectOption("REJECTED");
+    const reject = page.getByRole("dialog", { name: "Record the rejection" });
+    await expect(reject.getByLabel("Rejected after")).toHaveValue("INTERVIEW");
+    await reject.getByLabel("Reason").selectOption("failed_interview");
+    await reject.getByRole("button", { name: "Save" }).click();
+    await expect(application.getByText("Rejected at Interview: Didn't pass an interview").first()).toBeVisible();
+    await expect(application.getByText("Rejected", { exact: true })).toBeVisible();
+    await expect(application.getByRole("listitem").filter({ hasText: "Coding round logged" })).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await screenshot(page, "application-on-job");
+  });
   test("company sites are discovered by web search and kept with a watchlist", async ({ page }) => {
     // Up to 20 searches, each recording provider usage in the remote test database.
     test.setTimeout(120_000);

@@ -22,6 +22,7 @@ import {
 } from "@/server/repositories/jobs";
 import { getCareerProfile, setFeedSeenAt } from "@/server/repositories/profile";
 import { listRunsSince } from "@/server/repositories/search-runs";
+import { applicationStatusesForJobs } from "@/server/repositories/applications";
 import { listTargetRoles } from "@/server/repositories/target-roles";
 import { linksOf, rescoreAllJobs } from "./search-runs";
 
@@ -55,6 +56,8 @@ export type FeedCard = {
   dismissReason: string | null;
   applyUrl: string | null;
   applySite: string | null;
+  /** The application's status once the user marked the job as applied. */
+  applicationStatus: string | null;
 };
 
 const scorePartsSchema = z
@@ -77,6 +80,14 @@ export async function getFeed(userId: string, query: FeedQuery, now = new Date()
   ]);
   // Before the first visit nothing is "new": every job would be, which tells the user nothing.
   const seenAt = career?.feedSeenAt ?? null;
+  const applied = new Map(
+    (
+      await applicationStatusesForJobs(
+        userId,
+        jobs.map((j) => j.id),
+      )
+    ).map((a) => [a.jobId, a.status]),
+  );
   const cards: FeedCard[] = jobs.map((job) => {
     const { parts, adjustments } = scorePartsSchema.parse(job.scoreParts);
     const links = linksOf(job.applyLinks);
@@ -108,6 +119,7 @@ export async function getFeed(userId: string, query: FeedQuery, now = new Date()
       dismissReason: job.dismissReason,
       applyUrl: links[0]?.url ?? null,
       applySite: links[0]?.site ?? null,
+      applicationStatus: applied.get(job.id) ?? null,
     };
   });
   return {

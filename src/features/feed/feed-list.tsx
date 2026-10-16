@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { STATUS_LABELS, type ApplicationStatus } from "@/lib/applications/status";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -231,7 +232,15 @@ export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup
                   {job.staffing && <Badge variant="outline">Staffing agency</Badge>}
                   {job.companyBlocked && <Badge variant="outline">Blocked company</Badge>}
                   {job.stale && <Badge variant="outline">Older than 30 days</Badge>}
-                  {job.status === "saved" && <Badge variant="outline">Saved</Badge>}
+                  {job.applicationStatus ? (
+                    <Badge variant="info">
+                      Applied
+                      {job.applicationStatus !== "APPLIED" &&
+                        ` · ${STATUS_LABELS[job.applicationStatus as ApplicationStatus] ?? job.applicationStatus}`}
+                    </Badge>
+                  ) : (
+                    job.status === "saved" && <Badge variant="outline">Saved</Badge>
+                  )}
                   {job.status === "dismissed" && (
                     <Badge variant="outline">
                       Dismissed

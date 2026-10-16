@@ -1,15 +1,10 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { CalendarPlus, Send } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CalendarPlus, Send } from "lucide-react";
 import { toast } from "sonner";
-import {
-  addRoundAction,
-  changeStatusAction,
-  markAppliedAction,
-  undoStatusAction,
-} from "@/app/(app)/jobs/[jobId]/actions";
-import { Badge } from "@/components/ui/badge";
+import { markAppliedAction } from "@/app/(app)/applications/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,38 +20,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/features/profile/inputs";
 import {
   APPLICATION_SOURCES,
-  APPLICATION_STATUSES,
   REJECTION_REASONS,
-  ROUND_TYPES,
-  STAGE_STATUSES,
   STATUS_LABELS,
-  isClosed,
-  stageOf,
   type ApplicationSource,
   type ApplicationStatus,
   type RejectionReason,
-  type RoundType,
-  type StageStatus,
 } from "@/lib/applications/status";
 import { formatDate } from "@/lib/format";
-import { toastWithUndo } from "@/lib/toast";
 import type { ApplicationPanelView, ApplicationView } from "@/server/services/applications";
+import { AddRoundDialog, ChangeStatus, StatusBadge, dateToIso, todayLocal } from "./status-controls";
 
-/** Today in the user's own time zone, as the value of a date input. */
-function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** A date input's value as an ISO time: now for today, local noon for an earlier day (so time zones can't shift it). */
-function dateToIso(value: string): string {
-  return value === todayLocal() ? new Date().toISOString() : new Date(`${value}T12:00:00`).toISOString();
-}
-
-const statusVariant = (status: string) =>
-  status === "OFFER" ? "success" : status === "REJECTED" ? "destructive" : isClosed(status) ? "outline" : "brand";
-
-/** The job page's application section (SPEC §13): Mark as applied, then the status, rounds and latest activity. */
+/** The job page's application section (SPEC §13): Mark as applied, then the status and latest activity. */
 export function ApplicationPanel({ jobId, panel }: { jobId: string; panel: ApplicationPanelView }) {
   const app = panel.application;
   return (
@@ -65,7 +39,7 @@ export function ApplicationPanel({ jobId, panel }: { jobId: string; panel: Appli
         <h2 id="application-heading" className="text-base font-semibold">
           Application
         </h2>
-        {app && <Badge variant={statusVariant(app.status)}>{STATUS_LABELS[app.status as ApplicationStatus]}</Badge>}
+        {app && <StatusBadge status={app.status} />}
       </div>
       {app ? (
         <ApplicationSummary app={app} />
@@ -224,25 +198,41 @@ function MarkAppliedButton({ jobId, panel }: { jobId: string; panel: Application
   );
 }
 
-function ApplicationSummary({ app }: { app: ApplicationView }) {
-  const [roundOpen, setRoundOpen] = useState(false);
-  const [roundPrompt, setRoundPrompt] = useState(false);
-  const facts = [
+export function applicationFacts(
+  app: Pick<ApplicationView, "direction" | "appliedAt" | "source" | "resumeName" | "isReferral" | "referrerName">,
+): string {
+  return [
     `${app.direction === "inbound" ? "Recruiter reached out" : "Applied"} ${formatDate(app.appliedAt)}`,
     APPLICATION_SOURCES[app.source as ApplicationSource] ?? app.source,
     app.resumeName ? `CV: ${app.resumeName}` : "CV not in CareerOS",
     app.isReferral ? `Referral${app.referrerName ? ` from ${app.referrerName}` : ""}` : null,
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function RejectionLine({
+  app,
+}: {
+  app: Pick<ApplicationView, "status" | "rejectionReason" | "rejectedAtStage">;
+}) {
+  if (app.status !== "REJECTED" || !app.rejectionReason) return null;
+  return (
+    <p className="text-sm">
+      Rejected at {STATUS_LABELS[(app.rejectedAtStage ?? "APPLIED") as ApplicationStatus]}:{" "}
+      {REJECTION_REASONS[app.rejectionReason as RejectionReason] ?? app.rejectionReason}
+    </p>
+  );
+}
+
+function ApplicationSummary({ app }: { app: ApplicationView }) {
+  const [roundOpen, setRoundOpen] = useState(false);
+  const [roundPrompt, setRoundPrompt] = useState(false);
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{facts.join(" · ")}</p>
-      {app.status === "REJECTED" && app.rejectionReason && (
-        <p className="text-sm">
-          Rejected at {STATUS_LABELS[(app.rejectedAtStage ?? "APPLIED") as ApplicationStatus]}:{" "}
-          {REJECTION_REASONS[app.rejectionReason as RejectionReason] ?? app.rejectionReason}
-        </p>
-      )}
+      <p className="text-sm text-muted-foreground">{applicationFacts(app)}</p>
+      <RejectionLine app={app} />
       <div className="flex flex-wrap items-end gap-2">
         <ChangeStatus
           app={app}
@@ -265,258 +255,24 @@ function ApplicationSummary({ app }: { app: ApplicationView }) {
       </div>
       <AddRoundDialog applicationId={app.id} open={roundOpen} onOpenChange={setRoundOpen} prompt={roundPrompt} />
 
-      {app.rounds.length > 0 && (
-        <div className="space-y-1">
-          <h3 className="text-sm font-medium">Interview rounds</h3>
-          <ul className="space-y-1 text-sm text-muted-foreground">
-            {app.rounds.map((r) => (
-              <li key={r.id}>
-                {ROUND_TYPES[r.roundType] ?? r.roundType}
-                {r.scheduledAt ? ` · ${formatDate(r.scheduledAt)}` : ""}
-                {r.result !== "pending" ? ` · ${r.result}` : ""}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="space-y-1">
         <h3 className="text-sm font-medium">Latest activity</h3>
         <ol className="space-y-1 text-sm">
-          {app.events.slice(0, 5).map((e) => (
+          {app.events.slice(0, 3).map((e) => (
             <li key={e.id} className="flex flex-wrap gap-x-2">
               <span className="text-muted-foreground tabular-nums">{formatDate(e.occurredAt)}</span>
               <span>{e.title}</span>
-              {e.note && <span className="w-full pl-0 text-xs text-muted-foreground">{e.note}</span>}
             </li>
           ))}
         </ol>
       </div>
+      <Link
+        href={`/applications/${app.id}`}
+        className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
+      >
+        Timeline, rounds, follow-up and notes
+        <ArrowRight className="size-3.5" aria-hidden="true" />
+      </Link>
     </div>
-  );
-}
-
-/** Pick the new status, then confirm its date (and, for a rejection, the reason and stage). */
-function ChangeStatus({ app, onRoundOffer }: { app: ApplicationView; onRoundOffer: () => void }) {
-  const selectId = useId();
-  const ids = { date: useId(), reason: useId(), stage: useId(), note: useId() };
-  const [to, setTo] = useState<ApplicationStatus | null>(null);
-  const [occurredOn, setOccurredOn] = useState(todayLocal);
-  const [reason, setReason] = useState<RejectionReason | "">("");
-  const defaultStage = (
-    stageOf(app.status) !== null ? app.status : STAGE_STATUSES[app.stageReached - 1]
-  ) as StageStatus;
-  const [stage, setStage] = useState<StageStatus>(defaultStage);
-  const [note, setNote] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const choose = (value: string) => {
-    if (!value) return;
-    setTo(value as ApplicationStatus);
-    setOccurredOn(todayLocal());
-    setReason("");
-    setStage(defaultStage);
-    setNote("");
-  };
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!to) return;
-    startTransition(async () => {
-      const result = await changeStatusAction({
-        applicationId: app.id,
-        to,
-        occurredAt: dateToIso(occurredOn),
-        rejectionReason: to === "REJECTED" ? reason || null : null,
-        rejectedAtStage: to === "REJECTED" ? stage : null,
-        note,
-      });
-      if (!result.ok) return void toast.error(result.message);
-      setTo(null);
-      toastWithUndo(`Moved to ${STATUS_LABELS[to]}.`, async () => {
-        const undone = await undoStatusAction({ applicationId: app.id, eventId: result.data.eventId });
-        if (undone.ok) toast.success("Change undone.");
-        else toast.error(undone.message);
-      });
-      if (result.data.offerRound) onRoundOffer();
-    });
-  };
-
-  return (
-    <>
-      <Field className="w-auto">
-        <FieldLabel htmlFor={selectId}>Change status</FieldLabel>
-        <NativeSelect id={selectId} value="" onChange={(e) => choose(e.target.value)} className="w-48">
-          <option value="">Choose…</option>
-          {APPLICATION_STATUSES.filter((s) => s !== app.status).map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABELS[s]}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
-      <Dialog open={to !== null} onOpenChange={(open) => !open && setTo(null)}>
-        <DialogContent className="sm:max-w-md">
-          {to && (
-            <form onSubmit={submit} className="grid gap-4">
-              <DialogHeader>
-                <DialogTitle>{to === "REJECTED" ? "Record the rejection" : `Move to ${STATUS_LABELS[to]}`}</DialogTitle>
-                <DialogDescription>
-                  {to === "REJECTED"
-                    ? "The reason and stage feed your rejection patterns later, so pick the closest ones."
-                    : "Added to the application's timeline."}
-                </DialogDescription>
-              </DialogHeader>
-              <Field>
-                <FieldLabel htmlFor={ids.date}>When</FieldLabel>
-                <Input
-                  id={ids.date}
-                  type="date"
-                  required
-                  max={todayLocal()}
-                  value={occurredOn}
-                  onChange={(e) => setOccurredOn(e.target.value)}
-                />
-              </Field>
-              {to === "REJECTED" && (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor={ids.reason}>Reason</FieldLabel>
-                    <NativeSelect
-                      id={ids.reason}
-                      required
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value as RejectionReason)}
-                    >
-                      <option value="">Choose a reason…</option>
-                      {Object.entries(REJECTION_REASONS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={ids.stage}>Rejected after</FieldLabel>
-                    <NativeSelect
-                      id={ids.stage}
-                      value={stage}
-                      onChange={(e) => setStage(e.target.value as StageStatus)}
-                    >
-                      {STAGE_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </>
-              )}
-              <Field>
-                <FieldLabel htmlFor={ids.note}>Note (optional)</FieldLabel>
-                <Textarea
-                  id={ids.note}
-                  rows={2}
-                  maxLength={2000}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </Field>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setTo(null)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={pending || (to === "REJECTED" && !reason)}>
-                  {pending ? "Saving…" : "Save"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-/** Log a round; opened by the button, or offered after moving to an interview stage. */
-function AddRoundDialog({
-  applicationId,
-  open,
-  onOpenChange,
-  prompt,
-}: {
-  applicationId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  prompt: boolean;
-}) {
-  const ids = { type: useId(), when: useId(), notes: useId() };
-  const [roundType, setRoundType] = useState<RoundType>("technical");
-  const [when, setWhen] = useState("");
-  const [notes, setNotes] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    startTransition(async () => {
-      const result = await addRoundAction({
-        applicationId,
-        roundType,
-        scheduledAt: when ? new Date(when).toISOString() : null,
-        notes,
-      });
-      if (!result.ok) return void toast.error(result.message);
-      toast.success(`${ROUND_TYPES[roundType]} round added.`);
-      setWhen("");
-      setNotes("");
-      onOpenChange(false);
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={submit} className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>{prompt ? "Add the interview round?" : "Add interview round"}</DialogTitle>
-            <DialogDescription>
-              Logged rounds show up on the timeline and, later, in interview prep and analytics.
-            </DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor={ids.type}>Round type</FieldLabel>
-            <NativeSelect id={ids.type} value={roundType} onChange={(e) => setRoundType(e.target.value as RoundType)}>
-              {Object.entries(ROUND_TYPES).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={ids.when}>Date and time (optional)</FieldLabel>
-            <Input id={ids.when} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={ids.notes}>Notes (optional)</FieldLabel>
-            <Textarea
-              id={ids.notes}
-              rows={2}
-              maxLength={2000}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {prompt ? "Not now" : "Cancel"}
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Add round"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

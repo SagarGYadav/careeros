@@ -361,15 +361,20 @@ test.describe("signed in", () => {
     await expectNoSeriousA11yViolations(page);
     await screenshot(page, "fit-report");
   });
-  test("a job is marked as applied, moved to Interview with a round, and rejected with a reason", async ({ page }) => {
+  test("acceptance: find a job, mark it applied, drag it to Interview, log a round, reject it with a reason", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    // Find a job and mark it as applied from its page.
     await page.goto("/jobs");
     await page
       .getByRole("link", { name: /^Fit \d+/ })
       .first()
       .click();
     const application = page.getByRole("region", { name: "Application" });
+    // Read the title once the job page has loaded (the feed's own heading is there until then).
     await expect(application.getByRole("button", { name: "Mark as applied" })).toBeVisible();
-
+    const jobTitle = (await page.getByRole("heading", { level: 1 }).textContent())!.trim();
     await application.getByRole("button", { name: "Mark as applied" }).click();
     const dialog = page.getByRole("dialog", { name: "Mark as applied" });
     await expect(dialog.getByLabel("CV version sent")).toHaveValue(/.+/);
@@ -379,25 +384,67 @@ test.describe("signed in", () => {
     await expect(page.getByText(/^Marked as applied/)).toBeVisible();
     await expect(application.getByText("Applied with a referral from A. Friend")).toBeVisible();
 
-    await application.getByLabel("Change status").selectOption("INTERVIEW");
-    await page.getByRole("dialog", { name: "Move to Interview" }).getByRole("button", { name: "Save" }).click();
+    // On the board, move it to Interview with the keyboard (Space, arrows, Space), as a keyboard user would.
+    await page.getByRole("link", { name: "Applications", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Applications" })).toBeVisible();
+    const applied = page.getByRole("list", { name: "Applied applications" });
+    await expect(applied.getByRole("link", { name: jobTitle, exact: true })).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    const handle = applied.getByRole("button", { name: `Move ${jobTitle} at` });
+    await handle.focus();
+    // Each step waits for the screen-reader announcement, which also checks that they are made.
+    await page.keyboard.press("Space");
+    // "Picked up …" is replaced at once by where the card is now.
+    await expect(page.getByText(`${jobTitle} is over Applied.`)).toBeAttached();
+    for (const stage of ["Recruiter contact", "Assessment", "Interview"]) {
+      await page.keyboard.press("ArrowRight");
+      await expect(page.getByText(`${jobTitle} is over ${stage}.`)).toBeAttached();
+    }
+    await page.keyboard.press("Space");
+    await expect(page.getByText("Moved to Interview.")).toBeVisible();
+
+    // Moving to Interview offers to log the round.
     const round = page.getByRole("dialog", { name: "Add the interview round?" });
-    await expect(round).toBeVisible();
     await round.getByLabel("Round type").selectOption("coding");
     await round.getByRole("button", { name: "Add round" }).click();
     await expect(page.getByText("Coding round added.")).toBeVisible();
-    await expect(application.getByText("Interview", { exact: true })).toBeVisible();
+    // (The dialog hid the board from assistive tech while it was open, so check the card after it closes.)
+    const interview = page.getByRole("list", { name: "Interview applications" });
+    await expect(interview.getByRole("link", { name: jobTitle, exact: true })).toBeVisible();
+    await screenshot(page, "applications-board");
 
-    await application.getByLabel("Change status").selectOption("REJECTED");
+    // Open it and record the rejection with its reason; the stage defaults to Interview.
+    await interview.getByRole("link", { name: jobTitle, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: jobTitle, exact: true })).toBeVisible();
+    await page.getByRole("region", { name: "Status" }).getByLabel("Change status").selectOption("REJECTED");
     const reject = page.getByRole("dialog", { name: "Record the rejection" });
     await expect(reject.getByLabel("Rejected after")).toHaveValue("INTERVIEW");
     await reject.getByLabel("Reason").selectOption("failed_interview");
     await reject.getByRole("button", { name: "Save" }).click();
-    await expect(application.getByText("Rejected at Interview: Didn't pass an interview").first()).toBeVisible();
-    await expect(application.getByText("Rejected", { exact: true })).toBeVisible();
-    await expect(application.getByRole("listitem").filter({ hasText: "Coding round logged" })).toBeVisible();
+    await expect(page.getByText("Moved to Rejected.")).toBeVisible();
+
+    const timeline = page.getByRole("list", { name: "Timeline, newest first" });
+    await expect(timeline.getByRole("listitem")).toHaveText([
+      /Rejected at Interview: Didn't pass an interview/,
+      /Coding round logged/,
+      /Moved to Interview/,
+      /Applied with a referral from A\. Friend/,
+    ]);
+    await expect(page.getByText("Furthest stage: Interview")).toBeVisible();
+    const rounds = page.getByRole("region", { name: "Interview rounds" });
+    await rounds.getByLabel("Result").selectOption("failed");
+    await rounds.getByRole("button", { name: "Save round" }).click();
+    await expect(page.getByText("Round saved.")).toBeVisible();
     await expectNoSeriousA11yViolations(page);
-    await screenshot(page, "application-on-job");
+    await screenshot(page, "application-detail");
+
+    // The table shows the same application, closed; the feed marks the job as applied.
+    await page.goto("/applications?view=table");
+    const row = page.getByRole("row").filter({ hasText: jobTitle });
+    await expect(row.getByText("Rejected", { exact: true })).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await page.goto("/jobs");
+    await expect(page.getByText("Applied · Rejected").first()).toBeVisible();
   });
   test("company sites are discovered by web search and kept with a watchlist", async ({ page }) => {
     // Up to 20 searches, each recording provider usage in the remote test database.

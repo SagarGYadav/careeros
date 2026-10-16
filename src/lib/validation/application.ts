@@ -58,3 +58,32 @@ export const addRoundSchema = z.object({
   notes: optionalText(2_000),
 });
 export type AddRoundValues = z.output<typeof addRoundSchema>;
+
+export const ROUND_RESULTS = {
+  pending: "Waiting for the result",
+  passed: "Passed",
+  failed: "Didn't pass",
+  cancelled: "Cancelled",
+} as const;
+export const OFFER_DECISIONS = { pending: "Deciding", accepted: "Accepted", declined: "Declined" } as const;
+
+export const followUpSchema = z.object({ applicationId: id, followUpAt: isoTime.nullable() });
+
+export const notesSchema = z.object({ applicationId: id, notes: optionalText(5_000) });
+
+/** Something that happened outside CareerOS ("Sent a follow-up email"), added to the timeline. */
+export const timelineNoteSchema = z.object({
+  applicationId: id,
+  occurredAt: isoTime,
+  title: z.string().trim().min(2, "Describe what happened.").max(200, "Keep it under 200 characters."),
+  note: optionalText(2_000),
+});
+
+export const updateRoundSchema = z.object({
+  roundId: id,
+  result: z.enum(keys(ROUND_RESULTS)),
+  selfRating: z.number().int().min(1).max(5).nullable(),
+  notes: optionalText(2_000),
+});
+
+export const offerDecisionSchema = z.object({ applicationId: id, decision: z.enum(keys(OFFER_DECISIONS)) });

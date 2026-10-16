@@ -51,7 +51,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Track",
     items: [
-      { title: "Applications", href: "/applications", icon: SquareKanban, enabled: false, keywords: ["pipeline"] },
+      {
+        title: "Applications",
+        href: "/applications",
+        icon: SquareKanban,
+        enabled: true,
+        keywords: ["pipeline", "kanban", "applied"],
+      },
       { title: "Interviews", href: "/interviews", icon: MessagesSquare, enabled: false },
     ],
   },

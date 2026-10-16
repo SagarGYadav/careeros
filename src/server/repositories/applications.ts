@@ -133,3 +133,108 @@ export async function createInterviewRound(
     return created;
   }, TRANSACTION_OPTIONS);
 }
+
+/** Every application for the board and table, with the job's current title and the rounds (for Today's actions). */
+export async function listApplications(userId: string) {
+  return db.application.findMany({
+    where: { userId },
+    orderBy: [{ lastActivityAt: "desc" }],
+    select: {
+      id: true,
+      jobId: true,
+      status: true,
+      stageReached: true,
+      appliedAt: true,
+      lastActivityAt: true,
+      closedAt: true,
+      source: true,
+      isReferral: true,
+      direction: true,
+      followUpAt: true,
+      offerDecision: true,
+      job: { select: { title: true, companyName: true, fitScore: true } },
+      resumeVersion: { select: { name: true } },
+      rounds: { select: { roundType: true, scheduledAt: true, result: true } },
+    },
+  });
+}
+
+/** The frozen job of applications whose job no longer exists (rare), so they still show a title. */
+export async function listSnapshots(userId: string, applicationIds: string[]) {
+  if (!applicationIds.length) return [];
+  return db.application.findMany({
+    where: { userId, id: { in: applicationIds } },
+    select: { id: true, jobSnapshot: true },
+  });
+}
+
+/** Saved jobs not applied to yet: the board's "Saved" column (SPEC §13). */
+export async function listSavedJobsWithoutApplication(userId: string, take = 50) {
+  return db.job.findMany({
+    where: { userId, feedStatus: "saved", application: null },
+    orderBy: [{ sortScore: { sort: "desc", nulls: "last" } }, { discoveredAt: "desc" }],
+    take,
+    select: { id: true, title: true, companyName: true, fitScore: true, quickScore: true, locationCity: true },
+  });
+}
+
+/** One application with everything its page shows. */
+export async function getApplicationDetail(userId: string, applicationId: string) {
+  return db.application.findFirst({
+    where: { id: applicationId, userId },
+    include: {
+      job: { select: { id: true, applyLinks: true } },
+      resumeVersion: { select: { id: true, name: true } },
+      events: { orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }] },
+      rounds: { orderBy: [{ scheduledAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }] },
+    },
+  });
+}
+
+/** Changes plain fields (follow-up date, notes, offer decision), optionally logging it on the timeline. */
+export async function updateApplicationFields(
+  userId: string,
+  applicationId: string,
+  data: { followUpAt?: Date | null; notes?: string | null; offerDecision?: string | null; lastActivityAt?: Date },
+  event?: NewEvent,
+) {
+  return db.$transaction(async (tx) => {
+    const updated = await tx.application.updateMany({ where: { id: applicationId, userId }, data });
+    if (updated.count && event) {
+      await tx.applicationEvent.create({ data: { ...event, previous: undefined, userId, applicationId } });
+    }
+    return updated.count > 0;
+  }, TRANSACTION_OPTIONS);
+}
+
+export async function getInterviewRound(userId: string, roundId: string) {
+  return db.interviewRound.findFirst({ where: { id: roundId, userId } });
+}
+
+/** Records a round's result, rating and notes; a new result is added to the timeline. */
+export async function updateInterviewRound(
+  userId: string,
+  roundId: string,
+  data: { result: string; selfRating: number | null; notes: string | null },
+  event: (NewEvent & { applicationId: string }) | null,
+  lastActivityAt: Date,
+) {
+  return db.$transaction(async (tx) => {
+    const updated = await tx.interviewRound.updateMany({ where: { id: roundId, userId }, data });
+    if (updated.count && event) {
+      const { applicationId, ...rest } = event;
+      await tx.applicationEvent.create({ data: { ...rest, previous: undefined, userId, applicationId } });
+      await tx.application.updateMany({ where: { id: applicationId, userId }, data: { lastActivityAt } });
+    }
+    return updated.count > 0;
+  }, TRANSACTION_OPTIONS);
+}
+
+/** Feed badges: the application status of each listed job that has one. */
+export async function applicationStatusesForJobs(userId: string, jobIds: string[]) {
+  if (!jobIds.length) return [];
+  return db.application.findMany({
+    where: { userId, jobId: { in: jobIds } },
+    select: { jobId: true, status: true },
+  });
+}

@@ -44,6 +44,10 @@ export type JobView = {
     origin: string;
     postedVia: string | null;
     postedAt: string | null;
+    foundAt: string;
+    lastSeenAt: string;
+    /** Taken down from the company's own board. */
+    closedAt: string | null;
     applyLinks: { site: string; url: string }[];
     description: string;
     descriptionTruncated: boolean;
@@ -96,6 +100,9 @@ export async function getJobView(userId: string, jobId: string): Promise<JobView
       origin: job.origin,
       postedVia: job.postedVia,
       postedAt: job.postedAt?.toISOString() ?? null,
+      foundAt: job.discoveredAt.toISOString(),
+      lastSeenAt: job.lastSeenAt.toISOString(),
+      closedAt: job.closedAt?.toISOString() ?? null,
       applyLinks: linksOf(job.applyLinks),
       description: job.descriptionRaw,
       descriptionTruncated: job.descriptionTruncated,

@@ -9,10 +9,12 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FeedFilters, type FeedFilterValues } from "@/features/feed/feed-filters";
 import { FeedList } from "@/features/feed/feed-list";
+import { FindJobsPanel } from "@/features/search/find-jobs-panel";
 import { FEED_GROUPS, FEED_GROUP_LABELS, hasActiveFilters, parseFeedQuery, type FeedGroup } from "@/lib/jobs/feed";
 import { cn } from "@/lib/utils";
 import { getCurrentUser } from "@/server/auth/session";
 import { getFeed } from "@/server/services/feed";
+import { getSearchOverview } from "@/server/services/search-runs";
 
 export const metadata: Metadata = { title: "For you" };
 
@@ -65,17 +67,24 @@ async function Feed({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await connection();
   const [user, params] = await Promise.all([getCurrentUser(), searchParams]);
   const query = parseFeedQuery(params);
-  const feed = await getFeed(user.id, query);
+  const [feed, search] = await Promise.all([getFeed(user.id, query), getSearchOverview(user.id)]);
   const group = query.filters.group;
+  // Search again from here: new jobs are added, earlier ones kept and marked as seen again or closed.
+  const finder = (
+    <FindJobsPanel activeRunId={search.activeRunId} canSearch={feed.canSearch} lastSearchAt={search.runFinishedAt} />
+  );
 
   if (!feed.hasJobs) {
     return (
-      <EmptyState
-        icon={Briefcase}
-        title="No jobs yet"
-        description="Choose the roles you want on the Target roles page and run a search. Every job found is ranked and appears here."
-        action={<LinkButton href="/jobs/roles">Go to Target roles</LinkButton>}
-      />
+      <div className="space-y-4">
+        {finder}
+        <EmptyState
+          icon={Briefcase}
+          title="No jobs yet"
+          description="Choose the roles you want on the Target roles page and run a search. Every job found is ranked and appears here."
+          action={<LinkButton href="/jobs/roles">Go to Target roles</LinkButton>}
+        />
+      </div>
     );
   }
 
@@ -109,6 +118,7 @@ async function Feed({ searchParams }: { searchParams: Promise<SearchParams> }) {
 
   return (
     <div className="space-y-4">
+      {finder}
       <nav aria-label="Job groups" className="space-y-1.5">
         <div className="flex flex-wrap gap-1">{shown.map(groupLink)}</div>
         <div className="flex flex-wrap items-center gap-1">

@@ -14,7 +14,7 @@ import { FitReportView } from "@/features/fit-report/fit-report";
 import { ReportActions } from "@/features/fit-report/report-actions";
 import { Relevance } from "@/features/search/top-matches";
 import { isAppError } from "@/lib/errors";
-import { formatRelative } from "@/lib/format";
+import { formatDate, formatRelative } from "@/lib/format";
 import { fitReportToText } from "@/lib/fit-report/plain-text";
 import { getCurrentUser } from "@/server/auth/session";
 import { getApplicationPanel, type ApplicationPanelView } from "@/server/services/applications";
@@ -112,6 +112,10 @@ async function Job({ params }: { params: Promise<{ jobId: string }> }) {
         <span>
           {job.postedVia ? `via ${job.postedVia}` : job.provider !== "manual" && `from ${job.provider}`}
           {job.postedAt && <span suppressHydrationWarning> · posted {formatRelative(job.postedAt)}</span>}
+          <span suppressHydrationWarning>
+            {" "}
+            · found {formatDate(job.foundAt)} · last seen in a search {formatDate(job.lastSeenAt)}
+          </span>
         </span>
         {job.provider === "adzuna" && (
           <a href="https://www.adzuna.in" target="_blank" rel="noopener noreferrer" className="underline">
@@ -138,6 +142,15 @@ async function Job({ params }: { params: Promise<{ jobId: string }> }) {
         </div>
       )}
       <ApplicationPanel jobId={job.id} panel={panel} />
+      {job.closedAt && (
+        <p className="flex gap-1.5 text-sm text-warning">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span suppressHydrationWarning>
+            <span className="font-medium">Closed.</span> The company removed this posting from its careers site (noticed{" "}
+            {formatDate(job.closedAt)}). It reopens here if the company lists it again.
+          </span>
+        </p>
+      )}
       {job.notFitReasons.length > 0 && (
         <p className="flex gap-1.5 text-sm text-warning">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

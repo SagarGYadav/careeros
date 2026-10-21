@@ -233,6 +233,11 @@ test.describe("signed in", () => {
     const groups = page.getByRole("navigation", { name: "Job groups" });
     await expect(groups.getByRole("link", { name: /^For you \d+$/ })).toHaveAttribute("aria-current", "page");
     await expect(groups.getByRole("link", { name: "Dismissed 0" })).toBeVisible();
+    await expect(groups.getByRole("link", { name: "Closed 0" })).toBeVisible();
+    // Search again from here, and see when the list was last refreshed and when each job was found.
+    await expect(page.getByRole("button", { name: "Find jobs" })).toBeEnabled();
+    await expect(page.getByText(/^Last search: /)).toBeVisible();
+    await expect(page.getByText(/found \d{1,2} \w{3} \d{4}/).first()).toBeVisible();
 
     const selectBoxes = page.getByRole("checkbox", { name: /^Select .+ at / });
     await expect(selectBoxes.first()).toBeVisible();

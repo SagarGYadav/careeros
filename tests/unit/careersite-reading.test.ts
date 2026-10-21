@@ -51,6 +51,8 @@ describe("reading the recorded career sites", () => {
     async (_, fixture) => {
       const result = await readFixture(fixture.site);
       expect(result.total).toBe(fixture.allTitles.length);
+      // A board lists every posting's id, so jobs it stops listing can be marked closed.
+      if ("openIds" in result) expect(result.openIds).toHaveLength(fixture.allTitles.length);
       expect(result.postings.map((p) => p.title).sort()).toEqual([...fixture.matching].sort());
       for (const p of result.postings) {
         expect(p.description.length).toBeGreaterThan(10);

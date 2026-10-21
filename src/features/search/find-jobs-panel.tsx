@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { ProgressSteps, type ProgressStep } from "@/components/progress-steps";
 import { Button } from "@/components/ui/button";
+import { formatDate, formatRelative } from "@/lib/format";
 import type { RunProgress } from "@/server/services/search-runs";
 
 type ApiResult = { ok: true; data: RunProgress } | { ok: false; message: string };
@@ -50,7 +51,7 @@ function steps(p: RunProgress): ProgressStep[] {
       label: "Read company career sites",
       status: past("sites") && !p.sitesTotal ? "skipped" : status("sites"),
       detail: p.sitesTotal
-        ? `${p.sitesRead} of ${p.sitesTotal} sites · ${p.siteJobs} matching jobs · ${p.newSiteJobs} new`
+        ? `${p.sitesRead} of ${p.sitesTotal} sites · ${p.siteJobs} matching jobs · ${p.newSiteJobs} new${p.closedSiteJobs ? ` · ${p.closedSiteJobs} closed` : ""}`
         : past("sites")
           ? "No company sites due for a check."
           : undefined,
@@ -86,7 +87,16 @@ function steps(p: RunProgress): ProgressStep[] {
 }
 
 /** Runs a job search step by step (SPEC §11.5); a run left half-done resumes when the page opens again. */
-export function FindJobsPanel({ activeRunId, canSearch }: { activeRunId: string | null; canSearch: boolean }) {
+export function FindJobsPanel({
+  activeRunId,
+  canSearch,
+  lastSearchAt = null,
+}: {
+  activeRunId: string | null;
+  canSearch: boolean;
+  /** When the last search finished, so the user knows how fresh the list is. */
+  lastSearchAt?: string | null;
+}) {
   const router = useRouter();
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,8 +143,13 @@ export function FindJobsPanel({ activeRunId, canSearch }: { activeRunId: string 
           <h2 className="text-sm font-semibold">Find jobs</h2>
           <p className="text-xs text-muted-foreground">
             Searches job sites for your selected roles and locations, removes duplicates and ranks every job. You can
-            leave this page; the search continues when you come back.
+            leave this page; the search continues when you come back. Jobs found earlier are kept and updated.
           </p>
+          {lastSearchAt && (
+            <p className="mt-1 text-xs text-muted-foreground" suppressHydrationWarning>
+              Last search: {formatRelative(lastSearchAt)} ({formatDate(lastSearchAt)})
+            </p>
+          )}
         </div>
         <Button disabled={busy || !canSearch} onClick={() => void drive(() => post("/api/search-runs"))}>
           <Search aria-hidden="true" />

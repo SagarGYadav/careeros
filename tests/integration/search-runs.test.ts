@@ -116,9 +116,15 @@ describe("search runs", () => {
 
   it("finds nothing new when searching again, and doesn't duplicate saved jobs", async () => {
     const before = await db.job.count({ where: { userId } });
+    // Pretend the first search ran a week ago: searching again keeps every job and marks them as seen again.
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    await db.job.updateMany({ where: { userId }, data: { discoveredAt: weekAgo, lastSeenAt: weekAgo } });
     const again = await runToEnd(await startSearchRun(userId));
     expect(again).toMatchObject({ status: "done", newJobs: 0 });
     expect(await db.job.count({ where: { userId } })).toBe(before);
+    const jobs = await db.job.findMany({ where: { userId }, select: { discoveredAt: true, lastSeenAt: true } });
+    expect(jobs.every((j) => j.discoveredAt.getTime() === weekAgo.getTime())).toBe(true);
+    expect(jobs.filter((j) => j.lastSeenAt > weekAgo).length).toBeGreaterThan(0);
   }, 240_000);
 
   it("feeds the For you page: groups, filters, dismiss reasons that tune ranking, saving and blocking", async () => {

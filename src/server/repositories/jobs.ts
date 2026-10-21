@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { FEED_GROUPS, type FeedFilters, type FeedGroup } from "@/lib/jobs/feed";
+import { STALE_AFTER_DAYS } from "@/lib/jobs/prepare";
 import { db } from "@/server/db";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -83,6 +84,38 @@ export function mergeIntoJob(
       ...(data.description && { embeddingModel: null, embeddedAt: null }),
     },
   });
+}
+
+/** Jobs a search returned again: still listed somewhere, so seen now and open. */
+export function markJobsSeen(userId: string, ids: string[], now: Date) {
+  return db.job.updateMany({
+    where: { userId, id: { in: ids } },
+    data: { lastSeenAt: now, closedAt: null, closedReason: null },
+  });
+}
+
+/**
+ * After a complete read of a company's board (SPEC §11.3): its earlier jobs still listed are seen now (and reopened
+ * if they had closed); the ones missing were taken down, so they are closed. `openIds` are the board's posting ids.
+ */
+export async function syncCompanySiteJobs(userId: string, siteKey: string, openIds: string[], now: Date) {
+  const prefix = `${siteKey}:`;
+  const open = openIds.map((id) => `${prefix}${id}`.slice(0, 300));
+  const siteJobs = { userId, provider: "company_site", externalId: { startsWith: prefix } };
+  const [closed, seen] = await db.$transaction(
+    [
+      db.job.updateMany({
+        where: { ...siteJobs, closedAt: null, NOT: { externalId: { in: open } } },
+        data: { closedAt: now, closedReason: "removed_from_company_site" },
+      }),
+      db.job.updateMany({
+        where: { userId, provider: "company_site", externalId: { in: open } },
+        data: { lastSeenAt: now, closedAt: null, closedReason: null },
+      }),
+    ],
+    { maxWait: 10_000, timeout: 30_000 },
+  );
+  return { closed: closed.count, stillOpen: seen.count };
 }
 
 export async function runBatch(statements: Prisma.PrismaPromise<unknown>[]) {
@@ -203,17 +236,36 @@ const cleanCompany: Prisma.JobWhereInput = {
   OR: [{ companyId: null }, { company: { isStaffingAgency: false, isBlocked: false } }],
 };
 
+/**
+ * Older than 30 days, worked out now rather than when the job was found (a job found the day it was posted would
+ * otherwise never age): by its posting date, or by when a search last saw it if it has none.
+ */
+function staleWhere(now: Date): Prisma.JobWhereInput {
+  const cutoff = new Date(now.getTime() - STALE_AFTER_DAYS * 86_400_000);
+  return { OR: [{ postedAt: { lt: cutoff } }, { postedAt: null, lastSeenAt: { lt: cutoff } }] };
+}
+
 /** Each group's condition. A job hidden for any reason stays out of "For you"; the hidden groups may overlap. */
-function groupWhere(group: FeedGroup): Prisma.JobWhereInput {
+function groupWhere(group: FeedGroup, now: Date): Prisma.JobWhereInput {
   switch (group) {
     case "for_you":
-      return { AND: [notDismissed, { notFitReasons: { isEmpty: true } }, { isStale: false }, cleanCompany] };
+      return {
+        AND: [
+          notDismissed,
+          { notFitReasons: { isEmpty: true } },
+          { NOT: staleWhere(now) },
+          { closedAt: null },
+          cleanCompany,
+        ],
+      };
     case "saved":
       return { feedStatus: "saved" };
     case "not_fit":
       return { AND: [notDismissed, { NOT: { notFitReasons: { isEmpty: true } } }] };
     case "stale":
-      return { AND: [notDismissed, { isStale: true }] };
+      return { AND: [notDismissed, staleWhere(now)] };
+    case "closed":
+      return { AND: [notDismissed, { closedAt: { not: null } }] };
     case "agency":
       return { AND: [notDismissed, { company: { isStaffingAgency: true } }] };
     case "blocked":
@@ -224,7 +276,7 @@ function groupWhere(group: FeedGroup): Prisma.JobWhereInput {
 }
 
 function feedWhere(userId: string, filters: FeedFilters, now: Date): Prisma.JobWhereInput {
-  const and: Prisma.JobWhereInput[] = [groupWhere(filters.group)];
+  const and: Prisma.JobWhereInput[] = [groupWhere(filters.group, now)];
   if (filters.roleId) and.push({ targetRoleIds: { has: filters.roleId } });
   if (filters.city) and.push({ locationCity: filters.city });
   if (filters.workMode) and.push({ workMode: filters.workMode });
@@ -266,6 +318,8 @@ export async function listFeed(userId: string, filters: FeedFilters, page: numbe
         postedVia: true,
         postedAt: true,
         discoveredAt: true,
+        lastSeenAt: true,
+        closedAt: true,
         isDirectFromCompany: true,
         isStale: true,
         applyLinks: true,
@@ -285,9 +339,9 @@ export async function listFeed(userId: string, filters: FeedFilters, page: numbe
 }
 
 /** How many jobs each group holds (other filters ignored), for the group tabs. */
-export async function feedCounts(userId: string) {
+export async function feedCounts(userId: string, now = new Date()) {
   const counts = await Promise.all(
-    FEED_GROUPS.map((group) => db.job.count({ where: { userId, ...groupWhere(group) } })),
+    FEED_GROUPS.map((group) => db.job.count({ where: { userId, ...groupWhere(group, now) } })),
   );
   return Object.fromEntries(FEED_GROUPS.map((group, i) => [group, counts[i]])) as Record<FeedGroup, number>;
 }
@@ -386,6 +440,8 @@ export async function getJobDetail(userId: string, jobId: string) {
       postedVia: true,
       postedAt: true,
       discoveredAt: true,
+      lastSeenAt: true,
+      closedAt: true,
       applyLinks: true,
       descriptionRaw: true,
       descriptionTruncated: true,

@@ -629,6 +629,12 @@ model Job {
   applyLinks              Json
   postedAt                DateTime?
   discoveredAt            DateTime                    @default(now())
+  /// The last search or company-site read that returned this job (discoveredAt until it is seen again).
+  lastSeenAt              DateTime                    @default(now())
+  /// Set when the company's own board stopped listing it; cleared if it comes back.
+  closedAt                DateTime?
+  /// removed_from_company_site
+  closedReason            String?
   /// new | saved | dismissed
   feedStatus              String                      @default("new")
   dismissReason           String?

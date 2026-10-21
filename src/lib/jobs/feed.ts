@@ -4,7 +4,16 @@ import { z } from "zod";
 import type { ScorePart } from "./relevance";
 
 /** "for_you" and "saved" are shown; the others are hidden by default and listed with their counts. */
-export const FEED_GROUPS = ["for_you", "saved", "not_fit", "stale", "agency", "blocked", "dismissed"] as const;
+export const FEED_GROUPS = [
+  "for_you",
+  "saved",
+  "not_fit",
+  "stale",
+  "closed",
+  "agency",
+  "blocked",
+  "dismissed",
+] as const;
 export type FeedGroup = (typeof FEED_GROUPS)[number];
 
 export const FEED_GROUP_LABELS: Record<FeedGroup, string> = {
@@ -12,6 +21,7 @@ export const FEED_GROUP_LABELS: Record<FeedGroup, string> = {
   saved: "Saved",
   not_fit: "Not a fit",
   stale: "Older than 30 days",
+  closed: "Closed",
   agency: "Staffing agencies",
   blocked: "Blocked companies",
   dismissed: "Dismissed",
@@ -25,6 +35,9 @@ export const DISMISS_REASONS = {
   company: "Company",
   salary: "Salary",
 } as const;
+/** A job not returned by any search for this long, though searches ran since, is flagged on its card. */
+export const NOT_SEEN_DAYS = 14;
+
 export type DismissReason = keyof typeof DISMISS_REASONS;
 export const DISMISS_REASON_KEYS = Object.keys(DISMISS_REASONS) as [DismissReason, ...DismissReason[]];
 

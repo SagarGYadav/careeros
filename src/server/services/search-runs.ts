@@ -20,9 +20,11 @@ import {
   createJobs,
   findDedupeCandidates,
   listJobsForRanking,
+  markJobsSeen,
   mergeIntoJob,
   runBatch,
   saveScores,
+  syncCompanySiteJobs,
   topJobsOfRun,
   upsertCompanies,
   type NewJobRow,
@@ -99,8 +101,14 @@ const stateSchema = z.object({
   siteIndex: z.number().int().default(0),
   pagesLeft: z.number().int().nullable().default(null),
   deep: z
-    .object({ newSites: z.number().int(), siteJobs: z.number().int(), newSiteJobs: z.number().int() })
-    .default({ newSites: 0, siteJobs: 0, newSiteJobs: 0 }),
+    .object({
+      newSites: z.number().int(),
+      siteJobs: z.number().int(),
+      newSiteJobs: z.number().int(),
+      // Added later: runs saved before it read as 0.
+      closedSiteJobs: z.number().int().default(0),
+    })
+    .default({ newSites: 0, siteJobs: 0, newSiteJobs: 0, closedSiteJobs: 0 }),
 });
 type RunState = z.infer<typeof stateSchema>;
 const planSchema = z.object({
@@ -133,6 +141,8 @@ export type RunProgress = {
   sitesTotal: number;
   siteJobs: number;
   newSiteJobs: number;
+  /** Earlier company-site jobs this run found taken down from their board. */
+  closedSiteJobs: number;
   errors: string[];
 };
 
@@ -163,6 +173,7 @@ function progressOf(run: RunRow): RunProgress {
     sitesTotal: state.siteQueue?.length ?? 0,
     siteJobs: state.deep.siteJobs,
     newSiteJobs: state.deep.newSiteJobs,
+    closedSiteJobs: state.deep.closedSiteJobs,
     errors: z
       .array(z.object({ message: z.string() }))
       .catch([])
@@ -208,7 +219,7 @@ export async function startSearchRun(userId: string): Promise<RunProgress> {
     siteQueue: null,
     siteIndex: 0,
     pagesLeft: null,
-    deep: { newSites: 0, siteJobs: 0, newSiteJobs: 0 },
+    deep: { newSites: 0, siteJobs: 0, newSiteJobs: 0, closedSiteJobs: 0 },
   };
   const run = await createSearchRun(userId, {
     targetRoleIds: selected.map((r) => r.id),
@@ -280,6 +291,8 @@ async function saveResults(
 
   const rows: NewJobRow[] = [];
   const merges = [];
+  // Every job returned again is still listed: it was seen now (and is open, if a company board had dropped it).
+  const seenIds: string[] = [];
   for (const job of unique) {
     const existing = candidates.find((c) =>
       isSameJob(
@@ -296,6 +309,7 @@ async function saveResults(
       ),
     );
     if (existing) {
+      seenIds.push(existing.id);
       const sameListing = existing.provider === job.provider && existing.externalId === job.externalId;
       if (!sameListing) duplicates++;
       // The company's own page becomes the primary apply link (SPEC §11.3).
@@ -366,6 +380,7 @@ async function saveResults(
   }
   const created = await createJobs(userId, rows);
   await runBatch(merges);
+  if (seenIds.length) await markJobsSeen(userId, [...new Set(seenIds)], now);
   return { found: jobs.length, newJobs: created, duplicates };
 }
 
@@ -670,8 +685,12 @@ export async function advanceSearchRun(
         });
         state.pagesLeft = budget.pages;
         state.siteIndex++;
+        const site = read.openIds || read.postings.length ? await getCareerSite(userId, read.siteId) : null;
+        if (read.openIds && site) {
+          const synced = await syncCompanySiteJobs(userId, site.key, read.openIds, now);
+          state.deep.closedSiteJobs += synced.closed;
+        }
         if (read.postings.length) {
-          const site = await getCareerSite(userId, read.siteId);
           const groups = new Map<string, IncomingJob[]>();
           for (const posting of read.postings) {
             const roleIds = rolesForTitle(posting.title, reader.roles).join(",");

@@ -26,7 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatRelative } from "@/lib/format";
+import { formatDate, formatRelative } from "@/lib/format";
 import { RECOMMENDATION_LABELS } from "@/lib/fit-report/plain-text";
 import { DISMISS_REASONS, type DismissReason, type FeedGroup } from "@/lib/jobs/feed";
 import type { FeedCard } from "@/server/services/feed";
@@ -77,6 +77,9 @@ function DismissMenu({
     </DropdownMenu>
   );
 }
+
+/** A later search returned it again (on another day than it was found). */
+const seenLater = (job: FeedCard) => new Date(job.lastSeenAt).toDateString() !== new Date(job.foundAt).toDateString();
 
 /** The feed's job cards with per-card and bulk actions. */
 export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup }) {
@@ -232,6 +235,17 @@ export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup
                   {job.staffing && <Badge variant="outline">Staffing agency</Badge>}
                   {job.companyBlocked && <Badge variant="outline">Blocked company</Badge>}
                   {job.stale && <Badge variant="outline">Older than 30 days</Badge>}
+                  {job.closedAt && (
+                    <Badge variant="warning">
+                      Closed: removed from the company site{" "}
+                      <span suppressHydrationWarning>{formatDate(job.closedAt)}</span>
+                    </Badge>
+                  )}
+                  {job.notSeenSince && (
+                    <Badge variant="outline">
+                      Not in searches since <span suppressHydrationWarning>{formatDate(job.notSeenSince)}</span>
+                    </Badge>
+                  )}
                   {job.applicationStatus ? (
                     <Badge variant="info">
                       Applied
@@ -252,6 +266,11 @@ export function FeedList({ cards, group }: { cards: FeedCard[]; group: FeedGroup
                   <span>
                     {job.postedVia ? `via ${job.postedVia}` : `from ${job.provider}`}
                     {job.postedAt && <span suppressHydrationWarning> · posted {formatRelative(job.postedAt)}</span>}
+                    <span suppressHydrationWarning>
+                      {" "}
+                      · found {formatDate(job.foundAt)}
+                      {seenLater(job) && ` · last seen ${formatDate(job.lastSeenAt)}`}
+                    </span>
                   </span>
                   {job.provider === "adzuna" && (
                     <a href="https://www.adzuna.in" target="_blank" rel="noopener noreferrer" className="underline">

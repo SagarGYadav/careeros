@@ -20,7 +20,16 @@ export type AtsContext = {
 };
 
 /** Matching postings, plus every title the board lists (for the registry's count and the §11.6 measurement). */
-export type BoardRead = { postings: SitePosting[]; total: number; titles: string[] };
+export type BoardRead = {
+  postings: SitePosting[];
+  total: number;
+  titles: string[];
+  /**
+   * The ids of every posting the board lists (matching or not), or null when the list may be incomplete. A job read
+   * from this board earlier whose id is missing here has been taken down (closed).
+   */
+  openIds: string[] | null;
+};
 
 const date = (value: unknown): Date | null => {
   if (typeof value !== "string" && typeof value !== "number") return null;
@@ -63,7 +72,7 @@ async function greenhouse(token: string, company: string, ctx: AtsContext): Prom
       salaryText: null,
     }))
     .filter(ctx.want);
-  return { postings, total: jobs.length, titles: jobs.map((j) => j.title) };
+  return { postings, total: jobs.length, titles: jobs.map((j) => j.title), openIds: jobs.map((j) => String(j.id)) };
 }
 
 async function lever(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -114,7 +123,7 @@ async function lever(token: string, company: string, ctx: AtsContext): Promise<B
       };
     })
     .filter(ctx.want);
-  return { postings, total: data.length, titles: data.map((p) => p.text) };
+  return { postings, total: data.length, titles: data.map((p) => p.text), openIds: data.map((p) => p.id) };
 }
 
 async function ashby(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -152,7 +161,7 @@ async function ashby(token: string, company: string, ctx: AtsContext): Promise<B
       salaryText: j.compensation?.compensationTierSummary ?? null,
     }))
     .filter(ctx.want);
-  return { postings, total: listed.length, titles: listed.map((j) => j.title) };
+  return { postings, total: listed.length, titles: listed.map((j) => j.title), openIds: listed.map((j) => j.jobUrl) };
 }
 
 async function smartrecruiters(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -210,7 +219,14 @@ async function smartrecruiters(token: string, company: string, ctx: AtsContext):
       salaryText: null,
     });
   }
-  return { postings, total: list.totalFound ?? items.length, titles: items.map((i) => i.name) };
+  // One page of 100: a bigger board can't tell which postings were taken down.
+  const complete = items.length >= (list.totalFound ?? items.length);
+  return {
+    postings,
+    total: list.totalFound ?? items.length,
+    titles: items.map((i) => i.name),
+    openIds: complete ? items.map((i) => i.id) : null,
+  };
 }
 
 async function recruitee(token: string, company: string, ctx: AtsContext): Promise<BoardRead> {
@@ -252,7 +268,12 @@ async function recruitee(token: string, company: string, ctx: AtsContext): Promi
       };
     })
     .filter(ctx.want);
-  return { postings, total: offers.length, titles: offers.map((o) => o.title) };
+  return {
+    postings,
+    total: offers.length,
+    titles: offers.map((o) => o.title),
+    openIds: offers.map((o) => String(o.id)),
+  };
 }
 
 const ADAPTERS: Record<AtsKind, (token: string, company: string, ctx: AtsContext) => Promise<BoardRead>> = {

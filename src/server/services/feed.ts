@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import { formatSalaryRange } from "@/lib/format";
 import {
+  NOT_SEEN_DAYS,
   RANKING_REASONS,
   topGap,
   topReasons,
@@ -10,6 +11,7 @@ import {
   type FeedGroup,
   type FeedQuery,
 } from "@/lib/jobs/feed";
+import { STALE_AFTER_DAYS } from "@/lib/jobs/prepare";
 import type { ScorePart } from "@/lib/jobs/relevance";
 import {
   FEED_PAGE_SIZE,
@@ -21,7 +23,7 @@ import {
   setFeedStatus,
 } from "@/server/repositories/jobs";
 import { getCareerProfile, setFeedSeenAt } from "@/server/repositories/profile";
-import { listRunsSince } from "@/server/repositories/search-runs";
+import { getLatestFinishedRun, listRunsSince } from "@/server/repositories/search-runs";
 import { applicationStatusesForJobs } from "@/server/repositories/applications";
 import { listTargetRoles } from "@/server/repositories/target-roles";
 import { linksOf, rescoreAllJobs } from "./search-runs";
@@ -38,6 +40,17 @@ export type FeedCard = {
   provider: string;
   postedVia: string | null;
   postedAt: string | null;
+  /** When a search first found it. */
+  foundAt: string;
+  /** When a search or company-site read last returned it. */
+  lastSeenAt: string;
+  /** Taken down from the company's own board (checked on every company-site read). */
+  closedAt: string | null;
+  /**
+   * Set when searches have run since but none returned it for NOT_SEEN_DAYS: it may have closed. Job sites return
+   * only the top results for a query, so this is a hint, not a confirmed closing.
+   */
+  notSeenSince: string | null;
   isNew: boolean;
   direct: boolean;
   staffing: boolean;
@@ -70,14 +83,17 @@ const scorePartsSchema = z
 const feedStatusSchema = z.enum(["new", "saved", "dismissed"]).catch("new");
 
 export async function getFeed(userId: string, query: FeedQuery, now = new Date()) {
-  const [{ jobs, total }, counts, facets, roles, career, jobCount] = await Promise.all([
+  const [{ jobs, total }, counts, facets, roles, career, jobCount, latestRun] = await Promise.all([
     listFeed(userId, query.filters, query.page, now),
-    feedCounts(userId),
+    feedCounts(userId, now),
     feedFacets(userId),
     listTargetRoles(userId),
     getCareerProfile(userId),
     countJobs(userId),
+    getLatestFinishedRun(userId),
   ]);
+  const lastSearchAt = latestRun?.finishedAt ?? latestRun?.createdAt ?? null;
+  const notSeenCutoff = now.getTime() - NOT_SEEN_DAYS * 86_400_000;
   // Before the first visit nothing is "new": every job would be, which tells the user nothing.
   const seenAt = career?.feedSeenAt ?? null;
   const applied = new Map(
@@ -102,11 +118,19 @@ export async function getFeed(userId: string, query: FeedQuery, now = new Date()
       provider: job.provider,
       postedVia: job.postedVia,
       postedAt: job.postedAt?.toISOString() ?? null,
+      foundAt: job.discoveredAt.toISOString(),
+      lastSeenAt: job.lastSeenAt.toISOString(),
+      closedAt: job.closedAt?.toISOString() ?? null,
+      notSeenSince:
+        !job.closedAt && lastSearchAt && lastSearchAt > job.lastSeenAt && job.lastSeenAt.getTime() < notSeenCutoff
+          ? job.lastSeenAt.toISOString()
+          : null,
       isNew: Boolean(seenAt && job.discoveredAt > seenAt),
       direct: job.isDirectFromCompany,
       staffing: job.company?.isStaffingAgency ?? false,
       companyBlocked: job.company?.isBlocked ?? false,
-      stale: job.isStale,
+      // Worked out now, the same way the "Older than 30 days" group is.
+      stale: (job.postedAt ?? job.lastSeenAt).getTime() < now.getTime() - STALE_AFTER_DAYS * 86_400_000,
       score: job.quickScore,
       fitScore: job.fitScore,
       fitRecommendation: job.fitRecommendation as FeedCard["fitRecommendation"],
@@ -130,6 +154,8 @@ export async function getFeed(userId: string, query: FeedQuery, now = new Date()
     counts: counts as Record<FeedGroup, number>,
     facets,
     roles: roles.map((role) => ({ id: role.id, title: role.title })),
+    /** A search needs at least one selected target role. */
+    canSearch: roles.some((role) => role.selected),
     hasJobs: jobCount > 0,
   };
 }

@@ -67,7 +67,11 @@ async function Roles() {
   }
   return (
     <div className="space-y-6">
-      <FindJobsPanel activeRunId={search.activeRunId} canSearch={roles.some((r) => r.selected)} />
+      <FindJobsPanel
+        activeRunId={search.activeRunId}
+        canSearch={roles.some((r) => r.selected)}
+        lastSearchAt={search.runFinishedAt}
+      />
       <TopMatches matches={search.matches} runFinishedAt={search.runFinishedAt} />
       <div className="flex justify-end">
         <SuggestRolesButton label="Suggest again" variant="outline" />

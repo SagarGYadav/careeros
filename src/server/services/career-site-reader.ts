@@ -45,6 +45,8 @@ export type SiteReadResult = {
   method: PageRead["method"] | "ats";
   postings: SitePosting[];
   total: number;
+  /** Every posting id an ATS board lists (null for careers pages and failed reads): the rest have closed. */
+  openIds: string[] | null;
   status: string;
   error: string | null;
 };
@@ -87,7 +89,7 @@ export async function readCareerSite(
   // The registry row this read is recorded on (changes when a careers page turns out to be a known board).
   let targetId = site.id;
   try {
-    let read: { postings: SitePosting[]; total: number; method: SiteReadResult["method"] };
+    let read: { postings: SitePosting[]; total: number; method: SiteReadResult["method"]; openIds: string[] | null };
     let ats: SiteRef | null = ATS_KINDS.includes(site.kind as AtsKind)
       ? { kind: site.kind as AtsKind, token: site.boardToken!, url: site.url, key: site.key }
       : null;
@@ -119,12 +121,13 @@ export async function readCareerSite(
           });
         }
       } else {
-        read = { postings: page.postings, total: page.total, method: page.method };
+        // A careers page is read within a page budget, so a job missing from it may just not have been reached.
+        read = { postings: page.postings, total: page.total, method: page.method, openIds: null };
       }
     }
     if (ats) {
       const board = await readAtsBoard(ats.kind as AtsKind, ats.token!, company, ctx);
-      read = { postings: board.postings, total: board.total, method: "ats" };
+      read = { postings: board.postings, total: board.total, method: "ats", openIds: board.openIds };
     }
     const result = read!;
     const emptyRuns = result.postings.length ? 0 : site.emptyRuns + 1;
@@ -155,7 +158,7 @@ export async function readCareerSite(
       lastError: message.slice(0, 300),
     });
     if (!isAppError(error) && !http) console.error("career site read failed", error);
-    return { siteId: targetId, method: "none", postings: [], total: 0, status, error: message };
+    return { siteId: targetId, method: "none", postings: [], total: 0, openIds: null, status, error: message };
   }
 }
 

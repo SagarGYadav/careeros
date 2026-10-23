@@ -29,21 +29,21 @@ needs them is merged; CareerOS doesn't run migrations during a deploy. Use the d
 3. **Settings on the import screen:** framework **Next.js** (detected), root directory `./`, build and install commands
    left as they are (`npm install` runs `prisma generate`, then `next build`).
 4. **Environment variables:** open **Environment Variables**, click in the first key box and paste the whole contents of
-   your local `.env` (Vercel splits it into variables). Then change these before deploying:
+   `.env.vercel` (Vercel splits it into variables). Claude makes that file from your `.env` (it is git-ignored, like
+   `.env`) with these hosted differences:
 
    | Variable | Hosted value | Why |
    |---|---|---|
-   | `BETTER_AUTH_URL` | `https://<your-project>.vercel.app` (fill in after step 5) | sign-in cookies and links use the public address |
-   | `BETTER_AUTH_SECRET` | a new random value: run `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` | keep the hosted sessions separate from local ones |
+   | `BETTER_AUTH_URL` | left out | on Vercel the app uses its production address (`VERCEL_PROJECT_PRODUCTION_URL`) |
+   | `BETTER_AUTH_SECRET` | a new random value | keeps the hosted sessions separate from local ones |
    | `ALLOW_SIGNUP` | `false` | the site is public: nobody else can create an account and use your AI and search quotas. Your account already exists in the shared database. |
    | `EMBEDDING_PROVIDERS` | `cloudflare` | the local model isn't deployed |
-   | `DATABASE_URL_TEST` | delete it | tests never run on Vercel |
+   | `DATABASE_URL_TEST`, `E2E_*` | left out | tests never run on Vercel |
 
-   Keep everything else as in `.env` (AI, job search, web search and Cloudflare keys, `DEEP_SEARCH_ENABLED`, …).
-5. **Deploy.** When it finishes, copy the production address from the project page (e.g.
-   `https://careeros-sagar.vercel.app`), set `BETTER_AUTH_URL` to it under **Settings → Environment Variables**, then
-   **Deployments → ⋯ → Redeploy**.
-6. Open the address and sign in with your usual email and password.
+   Everything else is as in `.env` (AI, job search, web search and Cloudflare keys, `DEEP_SEARCH_ENABLED`, …). To
+   make the file yourself instead, copy `.env` and apply the table.
+5. **Deploy**, then open the production address from the project page (e.g. `https://careeros-sagar.vercel.app`) and
+   sign in with your usual email and password. A custom domain added later needs `BETTER_AUTH_URL` set to it.
 
 ## After that
 

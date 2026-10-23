@@ -9,8 +9,13 @@ const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  // Absolute base for the Open Graph image URL. BETTER_AUTH_URL is the app's public URL.
-  metadataBase: new URL(process.env.BETTER_AUTH_URL ?? "http://localhost:3000"),
+  // Absolute base for the Open Graph image URL: the app's public URL (on Vercel, its production address).
+  metadataBase: new URL(
+    process.env.BETTER_AUTH_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "http://localhost:3000"),
+  ),
   title: { default: "CareerOS", template: "%s · CareerOS" },
   description: "Personal career intelligence: CV-driven job discovery, fit reports and outcome analytics.",
 };
